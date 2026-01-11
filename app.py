@@ -3,64 +3,62 @@ import pandas as pd
 from google.oauth2.service_account import Credentials
 import gspread
 from datetime import datetime
-import plotly.express as px
 import time
 
 # ==========================================
-# 1. CONFIGURACIÓN DE PÁGINA Y ESTILO ROYAL
+# 1. CONFIGURACIÓN VISUAL Y CSS (DISEÑO ROYAL)
 # ==========================================
 st.set_page_config(
     page_title="Royal Dental Manager",
     page_icon="🦷",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed" # Colapsado al inicio para login limpio
 )
 
-# Colores Corporativos: Azul #002B5B, Dorado #D4AF37, Blanco #FFFFFF
+# Colores: Azul #002B5B, Dorado #D4AF37, Blanco #FFFFFF, Gris Claro #F4F6F6
 def cargar_estilo_royal():
     st.markdown("""
         <style>
-        /* Fondo general y fuentes */
+        /* IMPORTANTE: Estilos para la pantalla de LOGIN (Fondo Azul) */
         .stApp {
-            background-color: #F8F9FA;
+            background-color: #F4F6F6; /* Gris muy claro para la app interna */
         }
         
-        /* Sidebar Personalizado */
-        section[data-testid="stSidebar"] {
-            background-color: #002B5B;
-        }
-        section[data-testid="stSidebar"] h1, h2, h3, label, .stMarkdown {
-            color: #FFFFFF !important;
+        /* Estilos personalizados para contenedores */
+        .royal-card {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-left: 5px solid #D4AF37;
+            margin-bottom: 20px;
         }
         
-        /* Botones Principales (Dorado) */
+        /* Títulos */
+        h1, h2, h3 {
+            color: #002B5B !important;
+            font-family: 'Helvetica Neue', sans-serif;
+        }
+        
+        /* Botones Dorados */
         .stButton>button {
             background-color: #D4AF37;
             color: #002B5B;
-            border-radius: 8px;
             border: none;
             font-weight: bold;
+            width: 100%;
         }
         .stButton>button:hover {
             background-color: #B5952F;
-            color: #FFFFFF;
+            color: white;
         }
 
-        /* Títulos */
-        h1, h2, h3 {
-            color: #002B5B;
-            font-family: 'Helvetica', sans-serif;
+        /* Sidebar */
+        section[data-testid="stSidebar"] {
+            background-color: #002B5B;
         }
-        
-        /* Métricas */
-        div[data-testid="stMetricValue"] {
-            color: #D4AF37;
-        }
-        
-        /* Mensajes de éxito/error */
-        .stSuccess {
-            background-color: #D4EDDA;
-            color: #155724;
+        section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] span {
+            color: white !important;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -68,189 +66,229 @@ def cargar_estilo_royal():
 cargar_estilo_royal()
 
 # ==========================================
-# 2. CONEXIÓN A GOOGLE SHEETS (DB INAMOVIBLE)
+# 2. CONEXIÓN A BASE DE DATOS (DB)
 # ==========================================
 @st.cache_resource
 def get_database_connection():
-    # Asegúrate de configurar tus secrets en Streamlit Cloud
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     credentials = Credentials.from_service_account_info(
         st.secrets["gcp_service_account"], scopes=scope)
     client = gspread.authorize(credentials)
-    return client.open("ERP_DENTAL_DB") # Nombre exacto del archivo
+    return client.open("ERP_DENTAL_DB")
 
 try:
     db = get_database_connection()
-    # Mapeo de hojas existentes (NO CAMBIAR NOMBRES DE COLUMNAS)
     sheet_pacientes = db.worksheet("pacientes")
     sheet_citas = db.worksheet("citas")
-    sheet_servicios = db.worksheet("servicios")
-    # Verificar si existe asistencia, si no, crearla o conectarla
-    try:
-        sheet_asistencia = db.worksheet("asistencia")
-    except:
-        # Si no existe, podrías crearla manualmente en Sheets primero con las columnas:
-        # id_registro, fecha, doctor, hora_entrada, hora_salida, horas_totales, pago_dia_validado
-        st.error("⚠️ La hoja 'asistencia' no existe en el Google Sheet. Por favor créala.")
-        st.stop()
+    sheet_asistencia = db.worksheet("asistencia")
 except Exception as e:
-    st.error(f"Error de conexión con la Base de Datos: {e}")
+    st.error(f"❌ Error crítico de conexión: {e}")
     st.stop()
 
 # ==========================================
-# 3. LÓGICA DE SESIÓN Y LOGIN
+# 3. SISTEMA DE LOGIN MEJORADO
 # ==========================================
-if 'usuario' not in st.session_state:
-    st.session_state.usuario = None
-if 'rol' not in st.session_state:
-    st.session_state.rol = None
+if 'perfil' not in st.session_state:
+    st.session_state.perfil = None
 
-def login():
-    st.markdown("## 🔐 Acceso Royal Dental")
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.image("logo.png", width=150) # Asegúrate de que logo.png esté en la raíz
-    with col2:
-        usuario = st.selectbox("Seleccione Usuario", ["Director Yasberth", "Dr. Emmanuel", "Dra. Mónica"])
-        password = st.text_input("Contraseña", type="password")
+def pantalla_login():
+    # Truco de diseño: Usar columnas para centrar y fondo oscuro solo en esta sección
+    # Nota: Streamlit no permite cambiar el fondo de body dinámicamente fácil, 
+    # pero usaremos un contenedor visual fuerte.
+    
+    col_izq, col_centro, col_der = st.columns([1, 2, 1])
+    
+    with col_centro:
+        # Contenedor estilo tarjeta flotante
+        st.markdown("""
+        <div style="background-color: #002B5B; padding: 40px; border-radius: 15px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+            <h2 style="color: #D4AF37 !important;">ROYAL DENTAL</h2>
+            <p style="color: white;">Sistema de Gestión Integral v6.2</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        if st.button("Ingresar"):
-            # Lógica simple de contraseñas (En prod usar hash)
-            if usuario == "Director Yasberth" and password == "ROYALADMIN":
-                st.session_state.usuario = usuario
-                st.session_state.rol = "Director"
+        st.image("logo.png", use_container_width=True) # El logo se verá bien si tiene transparencia, si no, el contenedor azul ayuda.
+        
+        st.markdown("### 🔐 Seleccione Portal de Acceso")
+        
+        tipo_acceso = st.selectbox("Perfil", ["Seleccionar...", "🏥 CONSULTORIO", "💼 ADMINISTRACIÓN"])
+        password = st.text_input("Clave de Acceso", type="password")
+        
+        if st.button("INGRESAR AL SISTEMA"):
+            if tipo_acceso == "🏥 CONSULTORIO" and password == "ROYALCLINIC":
+                st.session_state.perfil = "Consultorio"
+                st.toast("✅ Acceso Correcto: Modo Operativo")
+                time.sleep(1)
                 st.rerun()
-            elif usuario == "Dr. Emmanuel" and password == "DOC123":
-                st.session_state.usuario = usuario
-                st.session_state.rol = "Doctor"
-                st.rerun()
-            elif usuario == "Dra. Mónica" and password == "DRAMONI":
-                st.session_state.usuario = usuario
-                st.session_state.rol = "Operativo"
+            elif tipo_acceso == "💼 ADMINISTRACIÓN" and password == "ROYALADMIN":
+                st.session_state.perfil = "Administracion"
+                st.toast("✅ Acceso Correcto: Modo Director")
+                time.sleep(1)
                 st.rerun()
             else:
-                st.error("Contraseña incorrecta")
+                st.error("⛔ Clave incorrecta o perfil no seleccionado.")
 
 # ==========================================
-# 4. MÓDULO DE ASISTENCIA (SIDEBAR)
+# 4. FUNCIONES DE ASISTENCIA (LOGICA INTERNA)
 # ==========================================
-def sidebar_asistencia():
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(f"### 👨‍⚕️ Hola, {st.session_state.usuario}")
-    
-    # Solo mostrar reloj checador a Doctores y Director (modo prueba)
-    if st.session_state.rol in ["Doctor", "Director"]:
-        st.sidebar.subheader("⏱️ Reloj Checador")
-        
-        # Lógica para determinar estado actual (Entró o Salió)
-        # Traemos los últimos registros de asistencia
-        data_asistencia = sheet_asistencia.get_all_records()
-        df_asistencia = pd.DataFrame(data_asistencia)
-        
+def registrar_entrada(doctor_nombre):
+    try:
+        data = sheet_asistencia.get_all_records()
+        nuevo_id = len(data) + 1
         hoy = datetime.now().strftime("%Y-%m-%d")
-        usuario_actual = st.session_state.usuario
+        hora = datetime.now().strftime("%H:%M:%S")
         
-        # Filtrar registros de hoy para este usuario
-        estado_actual = "Fuera"
-        ultimo_id = 0
-        
-        if not df_asistencia.empty:
-            registros_hoy = df_asistencia[
-                (df_asistencia['fecha'] == hoy) & 
-                (df_asistencia['doctor'] == usuario_actual)
-            ]
-            if not registros_hoy.empty:
-                ultimo_registro = registros_hoy.iloc[-1]
-                if ultimo_registro['hora_salida'] == "" or pd.isna(ultimo_registro['hora_salida']):
-                    estado_actual = "Trabajando"
-                    ultimo_id = ultimo_registro['id_registro']
-        
-        if estado_actual == "Fuera":
-            if st.sidebar.button("🟢 MARCAR ENTRADA"):
-                nuevo_id = len(data_asistencia) + 1
-                hora_entrada = datetime.now().strftime("%H:%M:%S")
-                # id_registro, fecha, doctor, hora_entrada, hora_salida, horas_totales, pago_dia_validado
-                nuevo_registro = [nuevo_id, hoy, usuario_actual, hora_entrada, "", "", "Pendiente"]
-                sheet_asistencia.append_row(nuevo_registro)
-                st.sidebar.success(f"Entrada: {hora_entrada}")
-                time.sleep(1)
-                st.rerun()
-        else:
-            st.sidebar.info(f"En turno desde: {registros_hoy.iloc[-1]['hora_entrada']}")
-            if st.sidebar.button("🔴 MARCAR SALIDA"):
-                hora_salida = datetime.now().strftime("%H:%M:%S")
-                
-                # Calcular horas totales
-                fmt = "%H:%M:%S"
-                t_entrada = datetime.strptime(registros_hoy.iloc[-1]['hora_entrada'], fmt)
-                t_salida = datetime.strptime(hora_salida, fmt)
-                duracion = t_salida - t_entrada
-                horas_totales = round(duracion.total_seconds() / 3600, 2)
-                
-                # Actualizar en Google Sheets (Buscar la fila correcta)
-                # OJO: gspread usa index 1-based. 
-                # Buscamos la fila basándonos en el ID.
-                cell = sheet_asistencia.find(str(ultimo_id))
-                row_idx = cell.row
-                
-                # Columnas: E=5 (salida), F=6 (horas)
-                sheet_asistencia.update_cell(row_idx, 5, hora_salida)
-                sheet_asistencia.update_cell(row_idx, 6, horas_totales)
-                
-                st.sidebar.success(f"Salida: {hora_salida}. Total: {horas_totales} hrs")
-                time.sleep(1)
-                st.rerun()
+        # id_registro, fecha, doctor, hora_entrada, hora_salida, horas_totales, pago_dia_validado
+        row = [nuevo_id, hoy, doctor_nombre, hora, "", "", "Pendiente"]
+        sheet_asistencia.append_row(row)
+        return True, hora
+    except Exception as e:
+        return False, str(e)
 
+def registrar_salida(doctor_nombre):
+    try:
+        data = sheet_asistencia.get_all_records()
+        df = pd.DataFrame(data)
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        
+        # Buscar el último registro abierto de hoy para este doctor
+        # Asumiendo que id_registro es único y secuencial
+        registros_hoy = df[(df['fecha'] == hoy) & (df['doctor'] == doctor_nombre)]
+        
+        if registros_hoy.empty:
+            return False, "No hay entrada registrada hoy."
+            
+        ultimo_registro = registros_hoy.iloc[-1]
+        
+        if ultimo_registro['hora_salida'] != "":
+            return False, "Ya has registrado tu salida hoy."
+            
+        # Calcular horas
+        hora_salida = datetime.now().strftime("%H:%M:%S")
+        fmt = "%H:%M:%S"
+        t_entrada = datetime.strptime(ultimo_registro['hora_entrada'], fmt)
+        t_salida = datetime.strptime(hora_salida, fmt)
+        horas = round((t_salida - t_entrada).total_seconds() / 3600, 2)
+        
+        # Actualizar celda (Busqueda por ID)
+        cell = sheet_asistencia.find(str(ultimo_registro['id_registro']))
+        row_idx = cell.row
+        
+        sheet_asistencia.update_cell(row_idx, 5, hora_salida) # Col E
+        sheet_asistencia.update_cell(row_idx, 6, horas)       # Col F
+        
+        return True, f"{hora_salida} ({horas} hrs)"
+        
+    except Exception as e:
+        return False, str(e)
+
+# ==========================================
+# 5. VISTA: CONSULTORIO (OPERATIVA)
+# ==========================================
+def vista_consultorio():
+    st.sidebar.title("🏥 Menú Clínica")
+    menu = st.sidebar.radio("Ir a:", ["Panel Principal", "Pacientes", "Agenda"])
+    
     if st.sidebar.button("Cerrar Sesión"):
-        st.session_state.usuario = None
-        st.session_state.rol = None
+        st.session_state.perfil = None
         st.rerun()
 
-# ==========================================
-# 5. ESTRUCTURA PRINCIPAL (MENÚ)
-# ==========================================
-def main_app():
-    sidebar_asistencia()
-    
-    # Menú de Navegación según Rol
-    menu_options = ["🏠 Inicio", "🦷 Pacientes", "📅 Agenda"]
-    
-    if st.session_state.rol == "Director":
-        menu_options.extend(["💰 Finanzas", "📊 Director Dashboard", "⚖️ Legal"])
-    
-    # Usamos radio buttons estilizados en el sidebar para navegación
-    selection = st.sidebar.radio("Navegación", menu_options)
-    
-    st.title(f"Royal Dental Manager - {selection}")
-    st.markdown("---")
+    if menu == "Panel Principal":
+        st.title("Bienvenido al Consultorio Royal Dental")
+        st.markdown("---")
+        
+        # PANEL DE ASISTENCIA RÁPIDA
+        st.markdown("### ⏱️ Control de Asistencia del Día")
+        
+        col1, col2 = st.columns(2)
+        
+        # TARJETA DR. EMMANUEL
+        with col1:
+            st.markdown("""
+            <div class="royal-card">
+                <h3 style="text-align: center;">👨‍⚕️ Dr. Emmanuel</h3>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Lógica visual simple para botones
+            col_a, col_b = st.columns(2)
+            if col_a.button("🟢 ENTRADA", key="ent_emma"):
+                ok, msg = registrar_entrada("Dr. Emmanuel")
+                if ok: st.success(f"Entrada: {msg}")
+                else: st.error(msg)
+                
+            if col_b.button("🔴 SALIDA", key="sal_emma"):
+                ok, msg = registrar_salida("Dr. Emmanuel")
+                if ok: st.success(f"Salida: {msg}")
+                else: st.warning(msg)
 
-    # --- RUTEO DE VISTAS ---
-    if selection == "🏠 Inicio":
-        st.info(f"Bienvenido al sistema v6.2. Panel de control de {st.session_state.usuario}.")
-        # Aquí pondremos tarjetas resumen más adelante
+        # TARJETA DRA. MÓNICA
+        with col2:
+            st.markdown("""
+            <div class="royal-card">
+                <h3 style="text-align: center;">👩‍⚕️ Dra. Mónica</h3>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            col_c, col_d = st.columns(2)
+            if col_c.button("🟢 ENTRADA", key="ent_moni"):
+                ok, msg = registrar_entrada("Dra. Mónica")
+                if ok: st.success(f"Entrada: {msg}")
+                else: st.error(msg)
+                
+            if col_d.button("🔴 SALIDA", key="sal_moni"):
+                ok, msg = registrar_salida("Dra. Mónica")
+                if ok: st.success(f"Salida: {msg}")
+                else: st.warning(msg)
         
-    elif selection == "🦷 Pacientes":
-        st.write("Módulo de Pacientes (Aquí iría tu código existente de Alta de Pacientes)")
-        # TODO: Pegar aquí tu lógica de AltaPacientes existente
-        
-    elif selection == "📅 Agenda":
-        st.write("Agenda del Consultorio")
-        # TODO: Pegar aquí tu lógica de Citas/Agenda
-        
-    elif selection == "💰 Finanzas":
-        st.warning("Zona Restringida: Finanzas y Nómina")
-        # TODO: Aquí desarrollaremos el cálculo de nómina del Dr. Emmanuel
-        
-    elif selection == "⚖️ Legal":
-        st.write("Generación de Documentos Legales")
-        if st.button("📄 Generar Aviso de Privacidad"):
-            st.success("Generando PDF... (Lógica pendiente de implementar)")
+        st.info("ℹ️ Recuerden marcar su entrada al llegar. El sistema registra la hora exacta para nómina.")
+
+    elif menu == "Pacientes":
+        st.header("🦷 Gestión de Pacientes")
+        st.write("Aquí cargaremos el módulo de Alta de Pacientes optimizado.")
+        # Aquí irá el código de Alta Pacientes
+
+    elif menu == "Agenda":
+        st.header("📅 Agenda del Día")
+        # Aquí irá el código de Citas
 
 # ==========================================
-# 6. EJECUCIÓN
+# 6. VISTA: ADMINISTRACIÓN (DIRECTOR)
+# ==========================================
+def vista_administracion():
+    st.sidebar.markdown("## 💼 DIRECTOR")
+    st.sidebar.markdown(f"Usuario: **Yasberth**")
+    
+    opcion = st.sidebar.radio("Gestión:", ["Dashboard Financiero", "Nómina", "Configuración"])
+    
+    if st.sidebar.button("Cerrar Sesión"):
+        st.session_state.perfil = None
+        st.rerun()
+        
+    st.title(f"Panel Director - {opcion}")
+    
+    if opcion == "Dashboard Financiero":
+        st.write("Gráficas de Ingresos vs Gastos (Pendiente de conectar a Plotly)")
+        
+    elif opcion == "Nómina":
+        st.write("Cálculo de Pagos Quincenales")
+        st.write("Aquí veremos las horas trabajadas del Dr. Emmanuel jaladas de la hoja 'asistencia'")
+        
+        # Previsualización rápida de asistencia
+        st.subheader("Registro de Asistencia en Tiempo Real")
+        try:
+            df_asist = pd.DataFrame(sheet_asistencia.get_all_records())
+            st.dataframe(df_asist)
+        except:
+            st.write("No hay datos aún.")
+
+# ==========================================
+# 7. MAIN
 # ==========================================
 if __name__ == "__main__":
-    if st.session_state.usuario is None:
-        login()
-    else:
-        main_app()
+    if st.session_state.perfil is None:
+        pantalla_login()
+    elif st.session_state.perfil == "Consultorio":
+        vista_consultorio()
+    elif st.session_state.perfil == "Administracion":
+        vista_administracion()
