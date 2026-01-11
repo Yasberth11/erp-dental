@@ -2,13 +2,13 @@ import streamlit as st
 import pandas as pd
 from google.oauth2.service_account import Credentials
 import gspread
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
-import re # Para validación de Email y Teléfono
+import re
 import time
 
 # ==========================================
-# 1. CONFIGURACIÓN ROYAL
+# 1. CONFIGURACIÓN Y ESTILO ROYAL
 # ==========================================
 st.set_page_config(page_title="Royal Dental Manager", page_icon="🦷", layout="wide", initial_sidebar_state="collapsed")
 TZ_MX = pytz.timezone('America/Mexico_City')
@@ -18,20 +18,24 @@ def cargar_estilo_royal():
         <style>
         .stApp { background-color: #F4F6F6; }
         .royal-card { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid #D4AF37; margin-bottom: 20px; }
-        h1, h2, h3 { color: #002B5B !important; font-family: 'Helvetica Neue', sans-serif; }
-        .stButton>button { background-color: #D4AF37; color: #002B5B; border: none; font-weight: bold; width: 100%; }
-        .stButton>button:hover { background-color: #B5952F; color: white; }
-        /* Inputs más limpios */
-        div[data-baseweb="input"] > div { border-radius: 8px; background-color: #FFFFFF; }
+        h1, h2, h3, h4 { color: #002B5B !important; font-family: 'Helvetica Neue', sans-serif; }
+        .stButton>button { background-color: #D4AF37; color: #002B5B; border: none; font-weight: bold; width: 100%; transition: all 0.3s; }
+        .stButton>button:hover { background-color: #B5952F; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        /* Inputs y Selects */
+        div[data-baseweb="input"] > div, div[data-baseweb="select"] > div { border-radius: 8px; background-color: #FFFFFF; border: 1px solid #D1D1D1; }
+        .stSuccess { background-color: #D4EDDA; color: #155724; border-left: 5px solid #28a745; }
+        .stError { background-color: #F8D7DA; color: #721c24; border-left: 5px solid #dc3545; }
         </style>
     """, unsafe_allow_html=True)
 
 cargar_estilo_royal()
 
 # ==========================================
-# 2. CONEXIÓN DB & HELPERS
+# 2. CONEXIÓN DB (SIN CACHÉ AGRESIVO PARA VER CAMBIOS REALES)
 # ==========================================
-@st.cache_resource
+# Usamos ttl=0 para forzar recarga si hay problemas de sincronización, 
+# o un ttl bajo (60s) para balancear.
+@st.cache_resource(ttl=10) 
 def get_database_connection():
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     credentials = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
@@ -40,265 +44,397 @@ def get_database_connection():
 
 try:
     db = get_database_connection()
+    # Mapeo de Hojas
     sheet_pacientes = db.worksheet("pacientes")
     sheet_citas = db.worksheet("citas")
     sheet_asistencia = db.worksheet("asistencia")
     sheet_servicios = db.worksheet("servicios")
 except Exception as e:
-    st.error(f"❌ Error DB: {e}")
+    st.error(f"❌ Error Crítico de Conexión: {e}")
     st.stop()
 
+# ==========================================
+# 3. HELPERS Y LÓGICA DE NEGOCIO
+# ==========================================
+def get_fecha_mx(): return datetime.now(TZ_MX).strftime("%Y-%m-%d")
+def get_hora_mx(): return datetime.now(TZ_MX).strftime("%H:%M:%S")
+
 def validar_email(email):
+    if not email: return True # Permitir vacío si no es obligatorio, o cambiar a False
     pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
     return re.match(pattern, email)
 
 def formatear_telefono(numero):
-    # Elimina todo lo que no sea número
-    limpio = re.sub(r'\D', '', numero)
+    limpio = re.sub(r'\D', '', str(numero))
     if len(limpio) == 10:
         return f"{limpio[:2]}-{limpio[2:6]}-{limpio[6:]}"
-    return numero # Devuelve original si no son 10
+    return numero
 
-def get_lista_pacientes():
-    try:
-        data = sheet_pacientes.get_all_records()
-        if not data: return []
-        df = pd.DataFrame(data)
-        # Crear lista string: "ID - Nombre Completo"
-        return [f"{row['id_paciente']} - {row['nombre']} {row['apellido_paterno']}" for index, row in df.iterrows()]
-    except: return []
+def generar_slots_tiempo():
+    # De 8:00 AM a 6:30 PM (última cita), intervalos de 30 min
+    slots = []
+    hora_actual = datetime.strptime("08:00", "%H:%M")
+    hora_fin = datetime.strptime("18:30", "%H:%M")
+    
+    while hora_actual <= hora_fin:
+        slots.append(hora_actual.strftime("%H:%M"))
+        hora_actual += timedelta(minutes=30)
+    return slots
 
-def get_catalogo_servicios():
-    try:
-        data = sheet_servicios.get_all_records()
-        if not data: return pd.DataFrame()
-        return pd.DataFrame(data)
-    except: return pd.DataFrame()
+def get_regimenes_fiscales():
+    # Lista 2026 actualizada
+    return [
+        "605 - Sueldos y Salarios e Ingresos Asimilados",
+        "612 - Personas Físicas con Actividades Empresariales y Profesionales",
+        "626 - Régimen Simplificado de Confianza (RESICO)",
+        "616 - Sin obligaciones fiscales",
+        "601 - General de Ley Personas Morales"
+    ]
+
+def get_usos_cfdi():
+    return ["D01 - Honorarios médicos, dentales y gastos hospitalarios", "S01 - Sin efectos fiscales", "G03 - Gastos en general"]
 
 # ==========================================
-# 3. LOGIN
+# 4. TEXTOS LEGALES (GENERADOR)
+# ==========================================
+def mostrar_texto_legal(tipo, nombre_paciente):
+    if tipo == "Privacidad":
+        return f"""
+        **AVISO DE PRIVACIDAD - ROYAL DENTAL**
+        
+        En cumplimiento con la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (LFPDPPP), 
+        ROYAL DENTAL hace de su conocimiento que los datos personales recabados del paciente **{nombre_paciente}** serán utilizados exclusivamente para los siguientes fines:
+        1. Prestación de servicios odontológicos.
+        2. Creación y manejo del expediente clínico.
+        3. Facturación y cobro.
+        
+        Usted tiene derecho a Acceder, Rectificar, Cancelar u Oponerse (Derechos ARCO) al tratamiento de sus datos.
+        Fecha de emisión: {get_fecha_mx()}
+        """
+    elif tipo == "Consentimiento":
+        return f"""
+        **CONSENTIMIENTO INFORMADO**
+        
+        Yo, **{nombre_paciente}**, declaro haber sido informado/a de manera clara sobre el diagnóstico, 
+        pronóstico y riesgos del tratamiento dental a realizar en ROYAL DENTAL.
+        
+        Autorizo al personal médico a realizar los procedimientos necesarios. Entiendo que la medicina y 
+        odontología no son ciencias exactas y no se me ha garantizado un resultado específico, sino el 
+        uso de los medios adecuados para mi salud.
+        """
+    return ""
+
+# ==========================================
+# 5. SISTEMA DE LOGIN
 # ==========================================
 if 'perfil' not in st.session_state: st.session_state.perfil = None
 
 def pantalla_login():
     col_izq, col_centro, col_der = st.columns([1, 2, 1])
     with col_centro:
-        st.markdown("""<div style="background-color: #002B5B; padding: 40px; border-radius: 15px; text-align: center;"><h2 style="color: #D4AF37 !important;">ROYAL DENTAL</h2></div>""", unsafe_allow_html=True)
-        tipo = st.selectbox("Perfil", ["Seleccionar...", "🏥 CONSULTORIO", "💼 ADMINISTRACIÓN"])
-        pwd = st.text_input("Clave", type="password")
-        if st.button("INGRESAR"):
+        st.markdown("""<div style="background-color: #002B5B; padding: 30px; border-radius: 15px; text-align: center;"><h2 style="color: #D4AF37 !important;">ROYAL DENTAL</h2></div>""", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        tipo = st.selectbox("Seleccione Perfil", ["Seleccionar...", "🏥 CONSULTORIO", "💼 ADMINISTRACIÓN"])
+        pwd = st.text_input("Contraseña", type="password")
+        
+        if st.button("INGRESAR AL SISTEMA"):
             if tipo == "🏥 CONSULTORIO" and pwd == "ROYALCLINIC":
                 st.session_state.perfil = "Consultorio"; st.rerun()
             elif tipo == "💼 ADMINISTRACIÓN" and pwd == "ROYALADMIN":
                 st.session_state.perfil = "Administracion"; st.rerun()
-            else: st.error("Clave incorrecta")
+            else: st.error("⛔ Credenciales incorrectas.")
 
 # ==========================================
-# 4. VISTA CONSULTORIO
+# 6. VISTA CONSULTORIO
 # ==========================================
 def vista_consultorio():
-    st.sidebar.title("🏥 Menú Clínica")
-    # Nueva Navegación Separada
-    menu = st.sidebar.radio("Ir a:", ["Panel Principal", "Pacientes", "Agenda (Citas)", "Planes de Tratamiento"])
-    if st.sidebar.button("Salir"): st.session_state.perfil = None; st.rerun()
+    st.sidebar.title("🏥 Royal Dental")
+    st.sidebar.markdown(f"User: **{st.session_state.perfil}**")
+    
+    # Menú reestructurado
+    menu = st.sidebar.radio("Navegación", ["1. Agenda & Citas", "2. Gestión Pacientes", "3. Control Asistencia"])
+    
+    if st.sidebar.button("Cerrar Sesión"):
+        st.session_state.perfil = None; st.rerun()
 
-    # --- PANEL PRINCIPAL (Asistencia) ---
-    if menu == "Panel Principal":
-        st.title("Panel Operativo")
-        st.markdown("### ⏱️ Control de Asistencia: Dr. Emmanuel")
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            st.markdown("""<div class="royal-card"><h4 style="text-align: center;">Dr. Emmanuel</h4></div>""", unsafe_allow_html=True)
-            c_a, c_b = st.columns(2)
-            if c_a.button("🟢 ENTRADA"):
-                # Lógica simplificada para demo
-                st.success(f"Entrada registrada a las {datetime.now(TZ_MX).strftime('%H:%M:%S')}")
-            if c_b.button("🔴 SALIDA"):
-                st.info("Salida registrada.")
-        with col2:
-            st.info("Recordatorio: Verificar la agenda del día antes de iniciar tratamientos.")
+    # ------------------------------------------------------------------
+    # MÓDULO 1: AGENDA (Tiempo Real + Citas)
+    # ------------------------------------------------------------------
+    if menu == "1. Agenda & Citas":
+        st.title("📅 Agenda del Consultorio")
+        
+        col_cal1, col_cal2 = st.columns([1, 2])
+        
+        # Selección de fecha
+        fecha_ver = col_cal1.date_input("Seleccionar Día", datetime.now(TZ_MX))
+        
+        # AGENDAR NUEVA CITA
+        with col_cal1:
+            with st.expander("➕ AGENDAR CITA NUEVA", expanded=True):
+                with st.form("form_agendar", clear_on_submit=True):
+                    # Cargar lista de pacientes
+                    pacientes_raw = sheet_pacientes.get_all_records()
+                    lista_pac = [f"{p['id_paciente']} - {p['nombre']} {p['apellido_paterno']}" for p in pacientes_raw] if pacientes_raw else []
+                    
+                    paciente_cita = st.selectbox("Paciente", ["Seleccionar..."] + lista_pac)
+                    
+                    # Slots de tiempo
+                    slots = generar_slots_tiempo()
+                    hora_cita = st.selectbox("Hora (30 min)", slots)
+                    
+                    tratamiento_cita = st.text_input("Motivo / Tratamiento")
+                    doc_cita = st.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
+                    
+                    es_urgencia = st.checkbox("🚨 Es Urgencia / Sobrecupo (Permitir duplicar hora)")
+                    
+                    btn_agendar = st.form_submit_button("Confirmar Cita")
+                    
+                    if btn_agendar:
+                        if paciente_cita != "Seleccionar..." and tratamiento_cita:
+                            # Validar disponibilidad
+                            citas_data = sheet_citas.get_all_records()
+                            df_citas = pd.DataFrame(citas_data)
+                            ocupado = False
+                            
+                            if not df_citas.empty:
+                                # Filtrar fecha y hora exacta
+                                # Asegurar tipos string
+                                df_citas['fecha'] = df_citas['fecha'].astype(str)
+                                df_citas['hora'] = df_citas['hora'].astype(str)
+                                
+                                # Hora viene HH:MM, en db puede estar HH:MM:SS, normalizar a HH:MM
+                                match = df_citas[
+                                    (df_citas['fecha'] == str(fecha_ver)) & 
+                                    (df_citas['hora'].str.startswith(hora_cita))
+                                ]
+                                if not match.empty:
+                                    ocupado = True
+                            
+                            if ocupado and not es_urgencia:
+                                st.error(f"⚠️ El horario {hora_cita} ya está ocupado. Marque 'Urgencia' para sobrecupo.")
+                            else:
+                                # Guardar
+                                id_pac = paciente_cita.split(" - ")[0]
+                                nom_pac = paciente_cita.split(" - ")[1]
+                                nuevo_id_cita = int(time.time())
+                                
+                                # id_cita, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, diente, doc...
+                                row = [nuevo_id_cita, str(fecha_ver), hora_cita, id_pac, nom_pac, 
+                                       "General", tratamiento_cita, "", doc_cita, 0, 0, 0, "No", 0, 0, "", "Pendiente", "No", ""]
+                                sheet_citas.append_row(row)
+                                st.success(f"Cita agendada: {hora_cita} - {nom_pac}")
+                                time.sleep(1)
+                                st.rerun()
+                        else:
+                            st.error("Falta seleccionar paciente o tratamiento.")
 
-    # --- PACIENTES ---
-    elif menu == "Pacientes":
-        st.header("🦷 Directorio de Pacientes")
+        # VISUALIZADOR DE AGENDA (GRILLA)
+        with col_cal2:
+            st.markdown(f"#### 🗓️ Visualización: {fecha_ver}")
+            
+            # Obtener citas del día
+            citas_data = sheet_citas.get_all_records()
+            df_c = pd.DataFrame(citas_data)
+            dict_agenda = {}
+            
+            if not df_c.empty:
+                df_c['fecha'] = df_c['fecha'].astype(str)
+                # Filtrar dia
+                df_dia = df_c[df_c['fecha'] == str(fecha_ver)]
+                # Crear diccionario Hora -> Info
+                for idx, row in df_dia.iterrows():
+                    # Normalizar hora a HH:MM
+                    h = str(row['hora'])[:5] 
+                    info = f"👤 {row['nombre_paciente']}<br>🦷 {row['tratamiento']}<br>👨‍⚕️ {row['doctor_atendio']}"
+                    # Si ya hay cita (urgencia), concatenar
+                    if h in dict_agenda:
+                        dict_agenda[h] += f"<br><hr style='margin:2px 0; border-top: 1px dashed red;'>🚨 <b>URGENCIA:</b><br>{info}"
+                    else:
+                        dict_agenda[h] = info
+
+            # Renderizar Slots
+            slots_visuales = generar_slots_tiempo()
+            
+            for slot in slots_visuales:
+                ocupado = slot in dict_agenda
+                bg_color = "#FFEBEE" if ocupado else "#E3F2FD" # Rojo suave ocupado, Azul suave libre
+                border_color = "#FFCDD2" if ocupado else "#BBDEFB"
+                contenido = dict_agenda[slot] if ocupado else "<span style='color:#888; font-size:0.8em;'>Disponible</span>"
+                
+                st.markdown(f"""
+                <div style="background-color: {bg_color}; border: 1px solid {border_color}; border-radius: 5px; padding: 8px; margin-bottom: 5px; display: flex; align-items: center;">
+                    <div style="font-weight: bold; color: #002B5B; width: 60px; font-size: 1.1em;">{slot}</div>
+                    <div style="margin-left: 10px; font-size: 0.9em; color: #333;">{contenido}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # ------------------------------------------------------------------
+    # MÓDULO 2: GESTIÓN DE PACIENTES (Alta + Legal)
+    # ------------------------------------------------------------------
+    elif menu == "2. Gestión Pacientes":
+        st.title("🦷 Expediente Clínico Digital")
         
-        # Búsqueda con Selectbox (Lista Desplegable)
-        lista_pacientes = get_lista_pacientes()
-        busqueda = st.selectbox("🔍 Buscar Paciente Existente:", ["Seleccionar..."] + lista_pacientes)
+        tab1, tab2 = st.tabs(["🔍 BUSCAR / GESTIONAR PACIENTE", "➕ NUEVO PACIENTE (ALTA)"])
         
-        if busqueda != "Seleccionar...":
-            # Extraer ID y mostrar datos
-            id_sel = busqueda.split(" - ")[0]
-            st.success(f"Expediente cargado: {busqueda}")
-            # Aquí mostraríamos historial, citas pasadas, etc.
-            st.info("Visualización de expediente completo (Historial Clínico) disponible aquí.")
-        
-        st.markdown("---")
-        
-        # ALTA DE PACIENTE (Layout corregido para TAB order)
-        with st.expander("➕ Crear Nuevo Expediente", expanded=(busqueda == "Seleccionar...")):
-            st.markdown("Rellene los datos en orden. Use **TAB** para navegar.")
-            with st.form("alta_paciente"):
-                # Orden estricto solicitado: Nombre -> Paterno -> Materno -> Fecha -> Tel -> Email
+        # --- PESTAÑA 1: GESTIÓN EXISTENTE ---
+        with tab1:
+            pacientes_raw = sheet_pacientes.get_all_records()
+            if not pacientes_raw:
+                st.warning("No hay pacientes registrados.")
+            else:
+                lista_busqueda = [f"{p['id_paciente']} - {p['nombre']} {p['apellido_paterno']}" for p in pacientes_raw]
+                seleccion = st.selectbox("Seleccionar Paciente para Gestión:", ["Buscar..."] + lista_busqueda)
                 
-                # Fila 1: Nombre (Ancho completo o mitad)
-                nombre = st.text_input("Nombre(s)")
+                if seleccion != "Buscar...":
+                    # Obtener datos del paciente seleccionado
+                    id_sel = int(seleccion.split(" - ")[0])
+                    # Buscar en la lista raw (es más rápido que filtrar DF a veces)
+                    paciente_data = next((item for item in pacientes_raw if item["id_paciente"] == id_sel), None)
+                    
+                    if paciente_data:
+                        st.markdown(f"### 📂 Expediente: {paciente_data['nombre']} {paciente_data['apellido_paterno']}")
+                        
+                        col_legal1, col_legal2 = st.columns(2)
+                        
+                        with col_legal1:
+                            st.info("📄 **Generación de Documentos Legales**")
+                            doc_accion = st.radio("Seleccionar Documento:", ["Historia Clínica", "Consentimiento Informado", "Aviso de Privacidad"], horizontal=True)
+                            
+                            if st.button(f"Generar {doc_accion}"):
+                                texto = mostrar_texto_legal(doc_accion.split()[0], f"{paciente_data['nombre']} {paciente_data['apellido_paterno']}")
+                                st.markdown("---")
+                                st.markdown(texto)
+                                st.success("Documento listo para imprimir/firmar (Simulación PDF).")
+                        
+                        with col_legal2:
+                            st.info("🦷 **Historial de Tratamientos**")
+                            # Filtrar citas de este paciente
+                            citas_raw = sheet_citas.get_all_records()
+                            df_hist = pd.DataFrame(citas_raw)
+                            if not df_hist.empty:
+                                df_p = df_hist[df_hist['id_paciente'].astype(str) == str(id_sel)]
+                                if not df_p.empty:
+                                    st.dataframe(df_p[['fecha', 'tratamiento', 'doctor_atendio', 'precio_final']])
+                                else:
+                                    st.caption("Sin tratamientos previos.")
+
+        # --- PESTAÑA 2: ALTA NUEVA (CORREGIDA Y COMPLETA) ---
+        with tab2:
+            st.markdown("#### Formulario de Alta (Campos Obligatorios *)")
+            
+            # Form con clear_on_submit=True para evitar duplicados al volver a clickear
+            with st.form("alta_paciente_full", clear_on_submit=True):
                 
-                # Fila 2: Apellidos
-                c1, c2 = st.columns(2)
-                ap_pat = c1.text_input("Apellido Paterno")
-                ap_mat = c2.text_input("Apellido Materno")
+                # SECCIÓN 1: DATOS PERSONALES
+                st.subheader("1. Datos Personales")
+                col_a, col_b, col_c = st.columns([1,1,1])
+                nombre = col_a.text_input("Nombre(s) *")
+                ap_pat = col_b.text_input("Apellido Paterno *")
+                ap_mat = col_c.text_input("Apellido Materno")
                 
-                # Fila 3: Fecha y Teléfono
-                c3, c4 = st.columns(2)
-                f_nac = c3.date_input("Fecha de Nacimiento", min_value=datetime(1920, 1, 1), max_value=datetime.now())
+                col_d, col_e = st.columns(2)
+                f_nac = col_d.date_input("Fecha de Nacimiento", min_value=datetime(1920, 1, 1), max_value=datetime.now())
                 
-                # Teléfono con validación visual
-                telefono_input = c4.text_input("Teléfono Móvil (10 dígitos)", placeholder="Ej. 5512345678")
+                # Teléfono
+                tel_input = col_e.text_input("Teléfono Móvil (10 dígitos) *", placeholder="5512345678")
                 
-                # Fila 4: Email
                 email = st.text_input("Correo Electrónico")
                 
-                # Datos Fiscales (Opcional, abajo)
+                # SECCIÓN 2: DATOS FISCALES (RESTAURADOS)
                 st.markdown("---")
-                st.caption("Datos Fiscales 2026")
-                rfc = st.text_input("RFC")
+                st.subheader("2. Datos Fiscales (Facturación)")
                 
-                submitted = st.form_submit_button("💾 Crear Expediente")
+                col_f1, col_f2 = st.columns(2)
+                rfc = col_f1.text_input("RFC (Opcional)")
+                cp = col_f2.text_input("Código Postal (CP)")
                 
-                if submitted:
+                regimen = col_f1.selectbox("Régimen Fiscal", get_regimenes_fiscales())
+                uso_cfdi = col_f2.selectbox("Uso de CFDI", get_usos_cfdi())
+                
+                # SECCIÓN 3: MÉDICOS
+                st.markdown("---")
+                st.subheader("3. Alertas Médicas")
+                alertas = st.text_area("Alergias / Padecimientos", placeholder="Ninguna")
+                
+                submit_btn = st.form_submit_button("💾 CREAR EXPEDIENTE")
+                
+                if submit_btn:
                     errores = []
-                    # Validaciones
+                    # Validaciones básicas
                     if not nombre or not ap_pat: errores.append("Nombre y Apellido Paterno son obligatorios.")
                     
-                    # Validar Telefono
-                    tel_clean = re.sub(r'\D', '', telefono_input)
-                    if len(tel_clean) != 10:
-                        errores.append("El teléfono debe tener exactamente 10 dígitos.")
-                    else:
-                        tel_final = f"{tel_clean[:2]}-{tel_clean[2:6]}-{tel_clean[6:]}" # Formato xx-xxxx-xxxx
-                    
-                    # Validar Email
-                    if email and not validar_email(email):
-                        errores.append("El correo electrónico no es válido (falta @ o extensión).")
+                    # Validar Tel
+                    tel_clean = re.sub(r'\D', '', tel_input)
+                    if len(tel_clean) != 10: errores.append("El teléfono debe tener 10 dígitos exactos.")
                     
                     if errores:
-                        for e in errores: st.error(f"⚠️ {e}")
+                        for err in errores: st.error(err)
                     else:
-                        # Guardar en DB
-                        try:
-                            # Lógica de guardado...
-                            st.success(f"✅ Paciente registrado: {nombre} {ap_pat}")
-                            st.info(f"Teléfono formateado: {tel_final}")
-                            st.balloons()
-                        except Exception as ex:
-                            st.error(f"Error al guardar: {ex}")
+                        # Chequeo anti-duplicados básico
+                        existe = False
+                        if pacientes_raw:
+                            for p in pacientes_raw:
+                                if str(p['nombre']).lower() == nombre.lower() and str(p['apellido_paterno']).lower() == ap_pat.lower():
+                                    existe = True
+                                    break
+                        
+                        if existe:
+                            st.error("⚠️ ERROR: Ya existe un paciente con ese Nombre y Apellido Paterno.")
+                        else:
+                            # Preparar datos
+                            nuevo_id = len(pacientes_raw) + 1 if pacientes_raw else 1
+                            fecha_reg = get_fecha_mx()
+                            tel_fmt = formatear_telefono(tel_clean)
+                            
+                            # ESTRUCTURA EXACTA 15 COLUMNAS
+                            # id, fecha, nombre, pat, mat, tel, email, rfc, regimen, uso, cp, alertas, link, estado, ultima
+                            row_new = [
+                                nuevo_id, 
+                                fecha_reg, 
+                                nombre, 
+                                ap_pat, 
+                                ap_mat, 
+                                tel_fmt, 
+                                email, 
+                                rfc, 
+                                regimen.split(" - ")[0], # Solo código
+                                uso_cfdi.split(" - ")[0], # Solo código
+                                cp, 
+                                alertas, 
+                                "", "Activo", ""
+                            ]
+                            
+                            try:
+                                sheet_pacientes.append_row(row_new)
+                                st.success(f"✅ Paciente {nombre} {ap_pat} registrado correctamente.")
+                                st.toast(f"Teléfono formateado: {tel_fmt}")
+                                time.sleep(1.5) # Espera breve para asegurar escritura
+                                st.rerun() # Recargar para limpiar form y actualizar listas
+                            except Exception as ex:
+                                st.error(f"Error al escribir en Google Sheets: {ex}")
 
-    # --- AGENDA (VISUALIZACIÓN) ---
-    elif menu == "Agenda (Citas)":
-        st.header("📅 Agenda del Consultorio")
-        
-        col_cal1, col_cal2 = st.columns([1,3])
-        fecha_ver = col_cal1.date_input("Seleccionar Fecha", datetime.now(TZ_MX))
-        
-        with col_cal2:
-            st.subheader(f"Citas para el: {fecha_ver}")
-            # Simulación de lectura de citas
-            try:
-                citas_all = pd.DataFrame(sheet_citas.get_all_records())
-                if not citas_all.empty:
-                    # Filtrar por fecha (asumiendo formato YYYY-MM-DD en string)
-                    # Convertir columna fecha a string para comparar
-                    citas_dia = citas_all[citas_all['fecha'].astype(str) == str(fecha_ver)]
-                    
-                    if not citas_dia.empty:
-                        # Mostrar tabla limpia
-                        st.dataframe(citas_dia[['hora', 'nombre_paciente', 'tratamiento', 'doctor_atendio', 'estado_pago']], use_container_width=True)
-                    else:
-                        st.info("No hay citas programadas para este día.")
-                else:
-                    st.info("Base de datos de citas vacía.")
-            except:
-                st.error("Error al leer la agenda.")
-
-    # --- NUEVO: PLANES DE TRATAMIENTO (COTIZADOR) ---
-    elif menu == "Planes de Tratamiento":
-        st.header("🦷 Plan de Tratamiento & Cotización")
-        
-        # 1. Seleccionar Paciente
-        pacientes_list = get_lista_pacientes()
-        paciente_sel = st.selectbox("Seleccionar Paciente", ["Buscar..."] + pacientes_list)
-        
-        if paciente_sel != "Buscar...":
-            st.markdown("---")
-            col_tr1, col_tr2 = st.columns([1, 1])
-            
-            # SELECCIÓN DE DIENTE (ODONTOGRAMA LÓGICO)
-            with col_tr1:
-                st.subheader("1. Ubicación Dental")
-                tipo_dent = st.radio("Dentición", ["Permanente (Adulto)", "Temporal (Niño)"], horizontal=True)
-                
-                cd1, cd2 = st.columns(2)
-                if tipo_dent == "Permanente (Adulto)":
-                    cuadrante = cd1.selectbox("Cuadrante", [1, 2, 3, 4])
-                    diente = cd2.selectbox("Diente", [1,2,3,4,5,6,7,8])
-                    diente_final = (cuadrante * 10) + diente
-                else:
-                    cuadrante = cd1.selectbox("Cuadrante", [5, 6, 7, 8])
-                    diente = cd2.selectbox("Diente", [1,2,3,4,5])
-                    diente_final = (cuadrante * 10) + diente
-                
-                st.metric("Diente Seleccionado", f"#{diente_final}")
-
-            # SELECCIÓN DE SERVICIO Y PRECIO
-            with col_tr2:
-                st.subheader("2. Detalle del Tratamiento")
-                
-                # Cargar servicios desde DB
-                df_servicios = get_catalogo_servicios()
-                
-                if not df_servicios.empty:
-                    servicio_sel = st.selectbox("Tratamiento", df_servicios['nombre_tratamiento'].unique())
-                    
-                    # Buscar precio del servicio seleccionado
-                    info_servicio = df_servicios[df_servicios['nombre_tratamiento'] == servicio_sel].iloc[0]
-                    precio_base = float(info_servicio['precio_lista'])
-                    
-                    st.write(f"Categoría: **{info_servicio['categoria']}**")
-                    precio_final = st.number_input("Precio Final (Editable)", value=precio_base)
-                else:
-                    st.warning("No hay servicios en la BD. Agrega manual.")
-                    servicio_sel = st.text_input("Tratamiento Manual")
-                    precio_final = st.number_input("Precio")
-
-                doctor = st.selectbox("Doctor que Atiende", ["Dr. Emmanuel", "Dra. Mónica"])
-                
-                # Botón de agendar
-                fecha_cita = st.date_input("Fecha de Cita")
-                hora_cita = st.time_input("Hora")
-                
-                if st.button("📅 AGENDAR CITA Y GUARDAR PLAN"):
-                    # Crear ID Cita
-                    # Guardar en sheet_citas
-                    nuevo_id_cita = str(int(time.time())) # ID simple basado en tiempo
-                    id_paciente = paciente_sel.split(" - ")[0]
-                    nombre_pac = paciente_sel.split(" - ")[1]
-                    
-                    # id_cita, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, numero_diente...
-                    # Ajusta el orden según tus columnas EXACTAS de Sheet citas
-                    row_cita = [
-                        nuevo_id_cita, str(fecha_cita), str(hora_cita), id_paciente, nombre_pac, 
-                        "General", servicio_sel, diente_final, doctor, 
-                        precio_base, precio_final, 0, "No", 0, 0, "Efectivo", "Pendiente", "No", ""
-                    ]
-                    
-                    sheet_citas.append_row(row_cita)
-                    st.success("✅ Cita agendada correctamente.")
-                    time.sleep(1.5)
-                    st.rerun()
+    # ------------------------------------------------------------------
+    # MÓDULO 3: ASISTENCIA (Simplificado)
+    # ------------------------------------------------------------------
+    elif menu == "3. Control Asistencia":
+        st.title("⏱️ Reloj Checador")
+        col1, col2 = st.columns([1,3])
+        with col1:
+             if st.button("Marcaje Rápido (Entrada)"):
+                 st.success("Entrada registrada (Demo)")
+        with col2:
+             st.info("Para reportes detallados, ingresar como Administrador.")
 
 # ==========================================
-# 5. MAIN APP
+# 7. VISTA ADMINISTRACIÓN
+# ==========================================
+def vista_admin():
+    st.title("Panel Director")
+    if st.button("Salir"): st.session_state.perfil=None; st.rerun()
+    st.write("Aquí van las finanzas y nómina compleja.")
+
+# ==========================================
+# MAIN APP
 # ==========================================
 if __name__ == "__main__":
     if st.session_state.perfil is None:
@@ -306,5 +442,4 @@ if __name__ == "__main__":
     elif st.session_state.perfil == "Consultorio":
         vista_consultorio()
     elif st.session_state.perfil == "Administracion":
-        st.title("Panel Director")
-        if st.button("Salir"): st.session_state.perfil=None; st.rerun()
+        vista_admin()
