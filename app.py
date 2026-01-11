@@ -1,31 +1,43 @@
 import streamlit as st
 import pandas as pd
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 from datetime import datetime
 
 # Configuración de la página
 st.set_page_config(page_title="ERP Dental", layout="wide")
 
-# --- CONEXIÓN SEGURA A GOOGLE SHEETS ---
+# --- CONEXIÓN SEGURA A GOOGLE SHEETS (VERSIÓN MODERNA) ---
 def conectar_google_sheets():
-    # Definimos el alcance de los permisos
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    # Definimos los permisos
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
     
-    # Usamos los secretos de Streamlit (esto lo configuraremos en el siguiente paso)
+    # Cargamos las credenciales desde los secretos de Streamlit
     creds_dict = st.secrets["gcp_service_account"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    
+    # Usamos la librería moderna google-auth
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     client = gspread.authorize(creds)
     
-    # Abre la hoja de cálculo por su nombre exacto
-    sheet = client.open("ERP_Dental_DB")
+    # Intentamos abrir la hoja (Probamos con mayúsculas y normal por si acaso)
+    try:
+        sheet = client.open("ERP_DENTAL_DB") # Nombre como en tu captura
+    except:
+        sheet = client.open("ERP_Dental_DB") # Intento alternativo
+        
     return sheet
 
 # --- FUNCIONES DE LECTURA/ESCRITURA ---
 def cargar_datos(hoja, pestaña):
-    worksheet = hoja.worksheet(pestaña)
-    datos = worksheet.get_all_records()
-    return pd.DataFrame(datos)
+    try:
+        worksheet = hoja.worksheet(pestaña)
+        datos = worksheet.get_all_records()
+        return pd.DataFrame(datos)
+    except gspread.exceptions.WorksheetNotFound:
+        return pd.DataFrame() # Devuelve vacío si no existe la pestaña
 
 def guardar_paciente(hoja, datos_paciente):
     worksheet = hoja.worksheet("pacientes")
@@ -39,9 +51,10 @@ def main():
     # Intentamos conectar
     try:
         sheet = conectar_google_sheets()
-        st.success("Conexión con Base de Datos: EXITOSA")
+        st.success("✅ Conexión Exitosa con la Base de Datos")
     except Exception as e:
-        st.error(f"Error conectando a la base de datos: {e}")
+        st.error(f"⚠️ Error de conexión: {e}")
+        st.info("Verifica que el nombre de tu Hoja en Google sea 'ERP_DENTAL_DB' y que hayas compartido el acceso con el email del robot.")
         st.stop()
 
     # Menú lateral
@@ -63,26 +76,27 @@ def main():
                 
                 if submitted and nombre:
                     fecha = datetime.now().strftime("%Y-%m-%d")
-                    # ID simple basado en el tiempo
                     id_p = int(datetime.now().timestamp())
                     
-                    guardar_paciente(sheet, [id_p, nombre, telefono, email, historial, fecha])
-                    st.success(f"Paciente {nombre} guardado correctamente.")
-                    st.rerun() # Recargar para ver el cambio
+                    try:
+                        guardar_paciente(sheet, [id_p, nombre, telefono, email, historial, fecha])
+                        st.success(f"Paciente {nombre} guardado correctamente.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al guardar: {e}")
 
         # Mostrar tabla de pacientes
-        try:
-            df_pacientes = cargar_datos(sheet, "pacientes")
-            if not df_pacientes.empty:
-                st.dataframe(df_pacientes, use_container_width=True)
-            else:
-                st.info("Aún no hay pacientes registrados.")
-        except:
-            st.warning("No se pudo leer la pestaña 'pacientes'. Revisa que exista en Google Sheets.")
+        st.subheader("Lista de Pacientes")
+        df_pacientes = cargar_datos(sheet, "pacientes")
+        
+        if not df_pacientes.empty:
+            st.dataframe(df_pacientes, use_container_width=True)
+        else:
+            st.info("Aún no hay pacientes registrados o no se encuentra la pestaña 'pacientes'.")
 
     elif menu == "Nueva Cita":
         st.header("Agendar Cita")
-        st.info("Módulo en construcción... (Primero probemos que guarde pacientes)")
+        st.warning("🚧 Módulo en construcción")
 
 if __name__ == "__main__":
     main()
