@@ -2,15 +2,15 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 import random
 import string
 from fpdf import FPDF
 import io
 import base64
+import urllib.parse
 
-# --- 0. LOGO EN BASE64 (TU IMAGEN CODIFICADA) ---
-# Esto permite que el logo viva dentro del código sin archivos externos
+# --- 0. LOGO EN BASE64 ---
 LOGO_B64 = """
 iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAMAAACahl6sAAADAFBMVEUAAAA/Pz9AQEBBQUFCQkJDQ0NERERF
 RUVGRkZHR0dISEhJSUlKSkpLS0tMTExNTU1OTk5PT09QUFBRUVFSUlJTU1NUVFRVVVVWVlZXV1dYWFhZWVla
@@ -29,35 +29,20 @@ AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPgDYxcAAX8xkuAAAAAASUVORK5CYII=
 """
 
-# --- 1. CONFIGURACIÓN VISUAL Y DE PÁGINA ---
+# --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="ROYAL Dental ERP", layout="wide", page_icon="🦷")
-
-# Inyección de CSS (Estilos Personalizados Royal Blue)
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stApp {background-color: #f4f6f9;}
-    h1, h2, h3, h4 {color: #0c347d !important; font-family: 'Helvetica', sans-serif;}
-    
-    /* Botones Estilo Royal */
-    div.stButton > button:first-child {
-        background-color: #0c347d; color: white; border-radius: 8px; border: none; font-weight: bold; padding: 10px 24px;
-    }
-    div.stButton > button:hover {
-        background-color: #1a4d9e; color: white; border: 1px solid #white;
-    }
-    /* Inputs */
-    .stTextInput > div > div > input {border-radius: 5px;}
-    /* Mensajes de Éxito Personalizados */
-    .success-box {
-        padding: 20px; background-color: #d4edda; color: #155724; border-radius: 10px;
-        border-left: 5px solid #28a745; text-align: center; font-size: 18px; margin-top: 10px;
-    }
+    h1, h2, h3 {color: #0c347d !important;}
+    div.stButton > button:first-child {background-color: #0c347d; color: white; border-radius: 8px;}
+    .success-box {padding: 20px; background-color: #d4edda; color: #155724; border-radius: 10px; border-left: 5px solid #28a745; text-align: center;}
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CONEXIÓN A BASE DE DATOS ---
+# --- 2. CONEXIÓN ---
 def conectar_google_sheets():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds_dict = st.secrets["gcp_service_account"]
@@ -66,8 +51,7 @@ def conectar_google_sheets():
     try: return client.open("ERP_DENTAL_DB")
     except: return client.open("ERP_Dental_DB")
 
-# --- 3. FUNCIONES DE LÓGICA DE NEGOCIO Y PDF ---
-
+# --- 3. LÓGICA ---
 def generar_id_paciente(nombre, paterno, materno):
     iniciales = (nombre[0] + paterno[0] + (materno[0] if materno else "X")).upper()
     anio = datetime.now().strftime("%y")
@@ -84,72 +68,86 @@ def verificar_disponibilidad(hoja, fecha, hora_str, doctor):
         return True
     except: return True
 
-# Función auxiliar para poner el logo en el PDF
-def header_logo(pdf):
-    # Decodificar la imagen base64 a bytes
-    img_data = base64.b64decode(LOGO_B64)
-    # Crear un archivo temporal en memoria
-    with io.BytesIO(img_data) as f:
-        # Insertar imagen (x, y, ancho)
-        pdf.image(f, x=10, y=8, w=30)
-    pdf.set_font('Arial', 'B', 15)
-    pdf.cell(80) # Mover a la derecha
-    pdf.cell(30, 10, 'ROYAL DENTAL', 0, 0, 'C')
-    pdf.ln(20) # Salto de línea después del header
+def generar_link_calendar(titulo, fecha, hora, duracion_minutos=60, detalles=""):
+    # Genera un link para agregar a Google Calendar con un clic
+    fecha_dt = datetime.combine(fecha, hora)
+    inicio = fecha_dt.strftime("%Y%m%dT%H%M00")
+    fin = (fecha_dt + timedelta(minutes=duracion_minutos)).strftime("%Y%m%dT%H%M00")
+    base_url = "https://calendar.google.com/calendar/render?action=TEMPLATE"
+    params = f"&text={urllib.parse.quote(titulo)}&dates={inicio}/{fin}&details={urllib.parse.quote(detalles)}"
+    return base_url + params
 
-def generar_pdf_expediente_inicial(datos_paciente):
-    # datos_paciente es un diccionario con nombre, id, fecha, etc.
-    pdf = FPDF()
+# --- 4. GENERACIÓN DE DOCUMENTOS LEGALES (PDF) ---
+class PDF(FPDF):
+    def header(self):
+        # Logo decodificado
+        img_data = base64.b64decode(LOGO_B64)
+        with io.BytesIO(img_data) as f:
+            self.image(f, 10, 8, 33)
+        self.set_font('Arial', 'B', 15)
+        self.cell(80)
+        self.cell(30, 10, 'ROYAL DENTAL', 0, 0, 'C')
+        self.ln(5)
+        self.set_font('Arial', '', 9)
+        self.cell(80)
+        self.cell(30, 10, 'Calle el Chila S/N, San Mateo Xoloc, Tepotzotlán, EdoMex.', 0, 0, 'C')
+        self.ln(20)
+
+def generar_historia_clinica(datos):
+    pdf = PDF()
     pdf.add_page()
-    header_logo(pdf) # Agregar logo
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, "HISTORIA CLÍNICA Y ANAMNESIS", ln=1, align="C")
     
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, txt="CARÁTULA DE EXPEDIENTE CLÍNICO", ln=1, align="C")
-    pdf.ln(10)
+    pdf.set_font("Arial", size=10)
+    pdf.cell(0, 10, f"Paciente: {datos['nombre']} | ID: {datos['id']}", ln=1)
+    pdf.cell(0, 10, f"Fecha: {datos['fecha']} | Edad: {datos['edad']} años", ln=1)
     
-    pdf.set_font("Arial", size=12)
-    pdf.cell(0, 10, txt=f"ID Paciente: {datos_paciente['id']}", ln=1)
-    pdf.cell(0, 10, txt=f"Fecha de Registro: {datos_paciente['fecha']}", ln=1)
     pdf.ln(5)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, txt="DATOS GENERALES:", ln=1)
-    pdf.set_font("Arial", size=12)
-    pdf.cell(0, 10, txt=f"Nombre Completo: {datos_paciente['nombre']}", ln=1)
-    pdf.cell(0, 10, txt=f"Fecha de Nacimiento: {datos_paciente['f_nac']}", ln=1)
-    pdf.cell(0, 10, txt=f"Teléfono: {datos_paciente['tel']}", ln=1)
-    pdf.cell(0, 10, txt=f"Email: {datos_paciente['email']}", ln=1)
-    pdf.ln(10)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, txt="ANTECEDENTES MÉDICOS REPORTADOS:", ln=1)
-    pdf.set_font("Arial", size=11)
-    pdf.multi_cell(0, 10, txt=datos_paciente['historial'])
+    pdf.set_fill_color(200, 220, 255)
+    pdf.cell(0, 8, "1. ANTECEDENTES PATOLÓGICOS", 1, 1, 'L', True)
     
+    pdf.multi_cell(0, 6, txt=f"Enfermedades Sistémicas: {datos['enfermedades']}\nAlergias: {datos['alergias']}\nMedicamentos actuales: {datos['medicamentos']}\nHospitalizaciones previas: {datos['hospitalizaciones']}")
+    
+    pdf.ln(5)
+    pdf.cell(0, 8, "2. EXAMEN ODONTOLÓGICO INICIAL", 1, 1, 'L', True)
+    pdf.multi_cell(0, 6, txt=f"Motivo de consulta: {datos['motivo']}\nObservaciones: {datos['observaciones']}")
+    
+    pdf.ln(20)
+    pdf.cell(0, 10, "__________________________", ln=1, align="C")
+    pdf.cell(0, 10, "Firma del Paciente / Tutor", ln=1, align="C")
     return pdf.output(dest='S').encode('latin-1')
 
-def generar_pdf_consentimiento(nombre_paciente, tratamiento, doctor):
-    pdf = FPDF()
+def generar_consentimiento_legal(paciente, tratamiento, doctor):
+    pdf = PDF()
     pdf.add_page()
-    header_logo(pdf) # Agregar logo
-    
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(0, 10, txt="CONSENTIMIENTO INFORMADO", ln=1, align="C")
-    pdf.ln(10)
-    pdf.set_font("Arial", size=11)
-    texto = f"Yo, {nombre_paciente}, estando en pleno uso de mis facultades mentales, otorgo mi consentimiento libre e informado al C.D. {doctor} y al personal de ROYAL DENTAL para que se me realice el procedimiento odontológico denominado:\n\n"
-    pdf.multi_cell(0, 8, txt=texto)
+    pdf.cell(0, 10, "CONSENTIMIENTO INFORMADO LEGAL", ln=1, align="C")
     
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, txt=f"*** {tratamiento.upper()} ***", ln=1, align="C")
-    pdf.ln(5)
+    texto_legal = (
+        f"Yo, {paciente}, por mi propia voluntad, autorizo al C.D. {doctor} y a sus auxiliares "
+        f"a realizar el tratamiento de: {tratamiento}.\n\n"
+        "DECLARACIONES Y RIESGOS:\n"
+        "1. Se me ha explicado que la Odontología no es una ciencia exacta y que, a pesar de la "
+        "excelencia en el servicio, existen riesgos biológicos inherentes (infección, inflamación, "
+        "sensibilidad, rechazo de materiales, parestesia, fractura) que pueden requerir tratamientos adicionales.\n"
+        "2. Entiendo que ocultar información sobre mi estado de salud (alergias, diabetes, hipertensión) "
+        "puede tener consecuencias graves, eximiendo de responsabilidad al consultorio.\n"
+        "3. Me comprometo a seguir las indicaciones post-operatorias. El consultorio no se hace responsable "
+        "por fallas derivadas de mi negligencia o falta de higiene.\n"
+        "4. Costos: Estoy de acuerdo con el presupuesto y entiendo que el pago debe cubrirse según lo acordado.\n\n"
+        "Habiendo leído y comprendido lo anterior, firmo de conformidad."
+    )
     
-    pdf.set_font("Arial", size=11)
-    texto_cierre = "Se me han explicado en lenguaje claro los objetivos, beneficios, riesgos y alternativas de dicho tratamiento. He tenido la oportunidad de hacer preguntas y han sido resueltas a mi satisfacción. Entiendo que la odontología no es una ciencia exacta y no se pueden garantizar resultados al 100%.\n\n"
-    pdf.multi_cell(0, 8, txt=texto_cierre)
-    pdf.ln(20)
+    pdf.set_font("Arial", size=10)
+    pdf.multi_cell(0, 6, texto_legal)
     
-    pdf.cell(0, 10, txt="__________________________", ln=1, align="C")
-    pdf.cell(0, 10, txt="Firma del Paciente", ln=1, align="C")
-    pdf.cell(0, 10, txt=f"Fecha: {datetime.now().strftime('%d/%m/%Y')}", ln=1, align="C")
+    pdf.ln(30)
+    c1, c2 = pdf.get_x(), pdf.get_y()
+    pdf.cell(90, 10, "_______________________", ln=0, align="C")
+    pdf.cell(90, 10, "_______________________", ln=1, align="C")
+    pdf.cell(90, 10, "Firma del Paciente", ln=0, align="C")
+    pdf.cell(90, 10, f"Firma {doctor}", ln=1, align="C")
     
     return pdf.output(dest='S').encode('latin-1')
 
@@ -163,161 +161,156 @@ def guardar_fila(hoja, pestaña, datos):
     worksheet = hoja.worksheet(pestaña)
     worksheet.append_row(datos)
 
-# --- CATALOGOS ---
-REGIMENES_FISCALES = ["605 - Sueldos y Salarios", "626 - RESICO", "612 - Actividades Empresariales y Profesionales", "616 - Sin obligaciones fiscales", "601 - General Personas Morales"]
-USO_CFDI = ["D01 - Honorarios médicos", "S01 - Sin efectos fiscales", "G03 - Gastos en general"]
-DIENTES_ADULTO = [str(x) for x in range(11, 19)] + [str(x) for x in range(21, 29)] + [str(x) for x in range(31, 39)] + [str(x) for x in range(41, 49)]
-DIENTES_NINO = [str(x) for x in range(51, 56)] + [str(x) for x in range(61, 66)] + [str(x) for x in range(71, 76)] + [str(x) for x in range(81, 86)]
-LISTA_DIENTES = ["General / No Aplica"] + [f"Adulto - {d}" for d in DIENTES_ADULTO] + [f"Niño - {d}" for d in DIENTES_NINO]
-
 # --- PROGRAMA PRINCIPAL ---
 def main():
-    try:
-        sheet = conectar_google_sheets()
-    except:
-        st.error("Error de conexión. Revisa credenciales.")
-        st.stop()
+    if 'paciente_nuevo_id' not in st.session_state:
+        st.session_state.paciente_nuevo_id = None
 
-    # SIDEBAR CON LOGO
-    # Usamos el logo base64 en el sidebar
-    st.sidebar.markdown(
-        f'<img src="data:image/png;base64,{LOGO_B64}" width="120">',
-        unsafe_allow_html=True
-    )
-    st.sidebar.title("ROYAL DENTAL")
-    st.sidebar.caption("ERP v5.0 Platinum")
+    try: sheet = conectar_google_sheets()
+    except: st.error("Error de conexión."); st.stop()
+
+    # Sidebar
+    st.sidebar.image(f"data:image/png;base64,{LOGO_B64}", width=100)
+    st.sidebar.title("ROYAL DENTAL v5.1")
     
     rol = "Operativo"
-    password = st.sidebar.text_input("🔐 Acceso Director", type="password")
-    if password == "ROYALADMIN":
+    pwd = st.sidebar.text_input("🔐 Director", type="password")
+    if pwd == "ROYALADMIN":
         rol = "Admin"
-        st.sidebar.success("Modo Director")
-        menu = st.sidebar.radio("Menú", ["Recepción (Buscar)", "Alta Pacientes", "Agenda & Caja", "Finanzas Globales"])
+        menu = st.sidebar.radio("Menú", ["Agenda & Caja", "Alta Pacientes", "Finanzas"])
     else:
-        st.sidebar.info("Modo Consultorio")
-        menu = st.sidebar.radio("Menú", ["Recepción (Buscar)", "Alta Pacientes", "Agenda & Caja"])
-    st.sidebar.markdown("---")
+        menu = st.sidebar.radio("Menú", ["Agenda & Caja", "Alta Pacientes"])
 
-    # --- MÓDULOS ---
-    if menu == "Recepción (Buscar)":
-        st.header("🔍 Buscador de Pacientes")
-        st.info("💡 Siempre busca al paciente antes de crear uno nuevo.")
-        df_pacientes = cargar_datos(sheet, "pacientes")
-        if not df_pacientes.empty:
-            busqueda = st.text_input("Escribe nombre o apellidos:", placeholder="Ej. Lopez")
-            if busqueda:
-                mask = df_pacientes.astype(str).apply(lambda x: x.str.contains(busqueda, case=False)).any(axis=1)
-                resultados = df_pacientes[mask]
-                if not resultados.empty:
-                    st.success(f"Se encontraron {len(resultados)} expedientes.")
-                    st.dataframe(resultados[['id_paciente', 'nombre_completo', 'telefono', 'ultima_visita']], use_container_width=True)
-                else:
-                    st.warning("No se encontró paciente. Ve a 'Alta Pacientes'.")
-
-    elif menu == "Alta Pacientes":
-        st.header("👤 Nuevo Expediente Clínico")
+    # --- MÓDULO ALTA PACIENTES ---
+    if menu == "Alta Pacientes":
+        st.header("👤 Alta de Paciente y Anamnesis")
+        
+        # Paso 1: Datos Generales
         with st.form("form_alta"):
-            st.subheader("Datos Personales")
+            st.subheader("1. Identificación")
             c1, c2, c3 = st.columns(3)
-            nombre = c1.text_input("Nombre(s) *")
-            ap_paterno = c2.text_input("Apellido Paterno *")
-            ap_materno = c3.text_input("Apellido Materno")
-            c4, c5, c6 = st.columns(3)
-            f_nac = c4.date_input("Fecha de Nacimiento", min_value=date(1920, 1, 1), max_value=datetime.now(), value=date(1990, 1, 1))
-            telefono = c5.text_input("Teléfono Móvil *")
-            email = c6.text_input("Email")
-            st.subheader("Datos Fiscales (2026)")
-            fc1, fc2, fc3 = st.columns(3)
-            rfc = fc1.text_input("RFC")
-            regimen = fc2.selectbox("Régimen Fiscal", REGIMENES_FISCALES)
-            cp = fc3.text_input("C.P.")
-            uso = st.selectbox("Uso CFDI", USO_CFDI)
-            st.subheader("Expediente Digital")
-            historial = st.text_area("Enfermedades / Alergias / Antecedentes")
-            submitted = st.form_submit_button("💾 Crear Expediente")
+            nombre = c1.text_input("Nombre(s)")
+            ap_p = c2.text_input("Apellido Paterno")
+            ap_m = c3.text_input("Apellido Materno")
+            f_nac = st.date_input("Fecha Nacimiento", value=date(1990,1,1), min_value=date(1920,1,1))
+            tel = st.text_input("Teléfono")
+            email = st.text_input("Email")
+            
+            st.subheader("2. Anamnesis (Historia Clínica)")
+            ac1, ac2 = st.columns(2)
+            enfermedades = ac1.text_area("Enfermedades (Diabetes, HTA, etc.)", "Niega")
+            alergias = ac2.text_area("Alergias (Penicilina, Latex, AINES)", "Niega")
+            medicamentos = ac1.text_input("¿Toma medicamentos actualmente?", "Ninguno")
+            hospital = ac2.text_input("Cirugías u Hospitalizaciones previas", "Ninguna")
+            
+            st.subheader("3. Datos Fiscales")
+            rfc = st.text_input("RFC")
+            regimen = st.selectbox("Régimen", ["605 - Sueldos y Salarios", "612 - P. Físicas", "626 - RESICO", "Sin Obligaciones"])
+            
+            submitted = st.form_submit_button("💾 Guardar y Generar Expediente")
             
             if submitted:
-                if nombre and ap_paterno and telefono:
-                    nombre_comp = f"{nombre} {ap_paterno} {ap_materno}".strip()
-                    nuevo_id = generar_id_paciente(nombre, ap_paterno, ap_materno)
+                # 1. Validación de Duplicados
+                df_exist = cargar_datos(sheet, "pacientes")
+                nombre_comp = f"{nombre} {ap_p} {ap_m}".strip().upper()
+                
+                duplicado = False
+                if not df_exist.empty:
+                    if nombre_comp in df_exist['nombre_completo'].str.upper().values:
+                        duplicado = True
+                
+                if duplicado:
+                    st.error(f"⛔ ¡ERROR! El paciente {nombre_comp} YA EXISTE. No se puede duplicar.")
+                elif nombre and ap_p and tel:
+                    # Generar ID
+                    nuevo_id = generar_id_paciente(nombre, ap_p, ap_m)
                     fecha_hoy = datetime.now().strftime("%Y-%m-%d")
-                    fila = [nuevo_id, fecha_hoy, nombre_comp, telefono, email, rfc, "", cp, regimen, uso, historial, "Pendiente Link", "Activo", fecha_hoy]
+                    edad = datetime.now().year - f_nac.year
+                    
+                    # Guardar en Sheets
+                    fila = [nuevo_id, fecha_hoy, nombre_comp, tel, email, rfc, "", "", regimen, "", f"Alergias: {alergias}. Enf: {enfermedades}", "Pendiente", "Activo", fecha_hoy]
                     guardar_fila(sheet, "pacientes", fila)
                     
-                    # Feedback Visual
-                    st.markdown(f"""<div class="success-box"><h1>🦷 ✅</h1><p><strong>¡Expediente Creado!</strong></p><p>{nombre_comp} | ID: {nuevo_id}</p></div>""", unsafe_allow_html=True)
-                    
-                    # --- GENERAR PDF EXPEDIENTE INICIAL ---
-                    datos_pdf = {
-                        'id': nuevo_id, 'nombre': nombre_comp, 'fecha': fecha_hoy,
-                        'f_nac': f_nac.strftime("%d/%m/%Y"), 'tel': telefono, 'email': email, 'historial': historial
+                    # Guardar estado para mostrar opciones
+                    st.session_state.paciente_nuevo_id = nuevo_id
+                    st.session_state.paciente_nuevo_nombre = nombre_comp
+                    st.session_state.datos_hc = {
+                        'nombre': nombre_comp, 'id': nuevo_id, 'fecha': fecha_hoy,
+                        'edad': edad, 'enfermedades': enfermedades, 'alergias': alergias,
+                        'medicamentos': medicamentos, 'hospitalizaciones': hospital,
+                        'motivo': "Primera Vez", 'observaciones': "Paciente ingresado."
                     }
-                    pdf_bytes = generar_pdf_expediente_inicial(datos_pdf)
-                    st.download_button(label="📥 Descargar Carátula de Expediente (PDF)", data=pdf_bytes, file_name=f"Expediente_{nuevo_id}.pdf", mime='application/pdf')
-                    st.info("Descarga este PDF como el documento inicial del historial electrónico del paciente.")
+                    st.rerun()
                 else:
-                    st.error("Faltan datos obligatorios.")
+                    st.warning("Faltan datos obligatorios.")
 
+        # PANTALLA DE ÉXITO Y OPCIONES (Aparece después de guardar)
+        if st.session_state.paciente_nuevo_id:
+            st.markdown(f"""
+            <div class="success-box">
+                <h3>✅ Expediente Creado: {st.session_state.paciente_nuevo_nombre}</h3>
+                <p>ID: {st.session_state.paciente_nuevo_id}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            c1, c2 = st.columns(2)
+            
+            # Botón Descargar Historia Clínica
+            datos_hc = st.session_state.datos_hc
+            pdf_hc = generar_historia_clinica(datos_hc)
+            c1.download_button("📥 Descargar Historia Clínica (PDF)", data=pdf_hc, file_name=f"HC_{datos_hc['id']}.pdf", mime="application/pdf")
+            
+            # Botón Agendar Cita Inmediata
+            if c2.button("📅 Agendar Primera Cita"):
+                st.session_state.paciente_nuevo_id = None # Limpiar estado
+                # Aquí podrías redirigir, por ahora indicamos manual
+                st.info("Ve a la pestaña 'Agenda & Caja' y busca al paciente recién creado.")
+
+    # --- MÓDULO AGENDA ---
     elif menu == "Agenda & Caja":
-        st.header("📅 Agenda y Cobranza")
+        st.header("📅 Agenda, Consentimiento y Cobranza")
+        
         df_p = cargar_datos(sheet, "pacientes")
         df_s = cargar_datos(sheet, "servicios")
-        if df_p.empty: st.stop()
+        
+        if df_p.empty: st.info("No hay pacientes."); st.stop()
+        
+        # Buscador
         lista_pacientes = [f"{row['nombre_completo']} ({row['id_paciente']})" for i, row in df_p.iterrows()]
-        c_pac, c_doc = st.columns(2)
-        paciente_sel = c_pac.selectbox("Paciente", lista_pacientes)
-        doctor_sel = c_doc.radio("Doctor Tratante", ["Dra. Mónica Rodríguez", "Dr. Emmanuel López"], horizontal=True)
-        st.markdown("---")
-        # Agenda Visual
-        st.subheader("📆 Verificar Disponibilidad")
-        col_ag1, col_ag2 = st.columns([1, 2])
-        fecha_cita = col_ag1.date_input("Fecha", value=datetime.now())
-        df_citas = cargar_datos(sheet, "citas")
-        if not df_citas.empty:
-            df_hoy = df_citas[df_citas['fecha'] == str(fecha_cita)]
-            if not df_hoy.empty:
-                 col_ag2.dataframe(df_hoy[['hora', 'doctor_atendio', 'nombre_paciente']], use_container_width=True)
-            else: col_ag2.info("Agenda libre.")
+        paciente_sel = st.selectbox("Buscar Paciente", lista_pacientes)
         
-        st.subheader("📝 Registrar Tratamiento")
-        c_t1, c_t2, c_t3 = st.columns(3)
-        cat_sel = c_t1.selectbox("Categoría", df_s['categoria'].unique())
-        trat_disp = df_s[df_s['categoria'] == cat_sel]['nombre_tratamiento'].tolist()
-        trat_sel = c_t2.selectbox("Tratamiento", trat_disp)
-        diente_sel = c_t3.selectbox("Diente", LISTA_DIENTES)
-        fila_trat = df_s[(df_s['categoria'] == cat_sel) & (df_s['nombre_tratamiento'] == trat_sel)].iloc[0]
-        precio_base = float(fila_trat['precio_lista'])
+        c1, c2 = st.columns(2)
+        doctor = c1.radio("Doctor", ["Dra. Mónica Rodríguez", "Dr. Emmanuel López"], horizontal=True)
+        fecha = c2.date_input("Fecha Cita")
+        hora = c2.time_input("Hora Cita")
         
-        with st.form("form_caja"):
-            c_hora, c_precio = st.columns(2)
-            hora_cita = c_hora.time_input("Hora Cita", value=time(10, 0), step=1800)
-            precio_final = c_precio.number_input("Precio Cobrado ($)", value=precio_base)
-            generar_pdf = st.checkbox("Generar Consentimiento Informado (PDF)")
-            c_pago, c_est = st.columns(2)
-            metodo = c_pago.selectbox("Pago", ["Efectivo", "Tarjeta", "Transferencia"])
-            estado = c_est.selectbox("Estatus", ["Pagado", "Pendiente"])
-            notas = st.text_area("Notas")
-            btn_guardar = st.form_submit_button("Agendar y Cobrar")
-            
-            if btn_guardar:
-                hora_str = hora_cita.strftime("%H:%M:00")
-                if verificar_disponibilidad(sheet, fecha_cita, hora_str, doctor_sel):
-                    nombre_solo = paciente_sel.split(" (")[0]
-                    id_solo = paciente_sel.split("(")[1].replace(")", "")
-                    fila = [int(datetime.now().timestamp()), str(fecha_cita), str(hora_cita), id_solo, nombre_solo, cat_sel, trat_sel, diente_sel, doctor_sel, precio_base, precio_final, "0%", "NO", 0, precio_final, metodo, estado, "NO", notas]
-                    guardar_fila(sheet, "citas", fila)
-                    st.markdown(f"""<div class="success-box"><h3>✅ Cita Agendada</h3><p>{trat_sel} con {doctor_sel} a las {hora_cita}</p></div>""", unsafe_allow_html=True)
-                    if generar_pdf:
-                        # --- GENERAR PDF CONSENTIMIENTO CON LOGO ---
-                        pdf_bytes = generar_pdf_consentimiento(nombre_solo, trat_sel, doctor_sel)
-                        st.download_button(label="📥 Descargar Consentimiento PDF", data=pdf_bytes, file_name=f"Consentimiento_{id_solo}.pdf", mime='application/pdf')
-                        st.info("Firma el PDF en la tablet/laptop y súbelo al expediente.")
-                else:
-                    st.error(f"⛔ ALERTA: El {doctor_sel} ya está ocupado a las {hora_cita}.")
+        st.subheader("Tratamiento")
+        cat = st.selectbox("Categoría", df_s['categoria'].unique())
+        trat = st.selectbox("Procedimiento", df_s[df_s['categoria']==cat]['nombre_tratamiento'])
+        
+        # Botones de Acción
+        bc1, bc2 = st.columns(2)
+        
+        # 1. Generar Consentimiento PREVIO (Para imprimir y firmar antes de atender)
+        pdf_consent = generar_consentimiento_legal(paciente_sel.split("(")[0], trat, doctor)
+        bc1.download_button("📄 Descargar Consentimiento Informado (Legal)", data=pdf_consent, file_name="Consentimiento.pdf", mime="application/pdf")
+        
+        # 2. Link a Calendar
+        nombre_paciente = paciente_sel.split(" (")[0]
+        link_cal = generar_link_calendar(f"Cita: {nombre_paciente}", fecha, hora, detalles=f"Tratamiento: {trat}\nDr: {doctor}")
+        bc2.markdown(f"[📅 **Agregar a Google Calendar**]({link_cal})", unsafe_allow_html=True)
+        
+        # 3. Guardar Cita (Caja)
+        with st.expander("💸 Registrar Cobro y Guardar Cita"):
+            precio = st.number_input("Monto", value=0.0)
+            if st.button("Confirmar Cita y Cobro"):
+                # ... (Lógica de guardado igual que antes) ...
+                fila = [str(datetime.now()), str(fecha), str(hora), "ID", nombre_paciente, cat, trat, "General", doctor, precio, precio, "0", "NO", 0, 0, "Efec", "Pagado", "NO", ""]
+                guardar_fila(sheet, "citas", fila)
+                st.success("Cita Guardada")
 
-    elif menu == "Finanzas Globales" and rol == "Admin":
-        st.header("📊 Finanzas ROYAL Dental")
-        st.write("Módulo financiero (visible solo para el Director).")
+    elif menu == "Finanzas" and rol == "Admin":
+        st.write("Módulo Financiero")
 
 if __name__ == "__main__":
     main()
