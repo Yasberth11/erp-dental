@@ -319,4 +319,188 @@ def vista_consultorio():
                 regimen = st.selectbox("Régimen Fiscal", get_regimenes_fiscales())
                 uso = st.selectbox("Uso CFDI", get_usos_cfdi())
                 
-                if
+                if st.form_submit_button("💾 GUARDAR PACIENTE"):
+                    errores = []
+                    if not tel.isdigit() or len(tel) != 10: errores.append("❌ El teléfono debe contener EXACTAMENTE 10 números.")
+                    if not nombre or not paterno: errores.append("❌ Nombre y Apellido son obligatorios.")
+                        
+                    if errores:
+                        for e in errores: st.error(e)
+                    else:
+                        nom_f = limpiar_texto_mayus(nombre)
+                        pat_f = limpiar_texto_mayus(paterno)
+                        mat_f = limpiar_texto_mayus(materno)
+                        mail_f = limpiar_email(email)
+                        
+                        if requiere_factura:
+                            rfc_final = rfc.upper()
+                            cp_final = cp
+                            reg_final = regimen.split(" - ")[0]
+                            uso_final = uso.split(" - ")[0]
+                        else:
+                            rfc_final = "XAXX010101000"
+                            cp_final = "N/A"
+                            reg_final = "616"
+                            uso_final = "S01"
+                        
+                        nuevo_id = generar_id_unico(nom_f, pat_f, nacimiento)
+                        fecha_reg = get_fecha_mx()
+                        tel_fmt = f"{tel[:2]}-{tel[2:6]}-{tel[6:]}"
+                        
+                        row = [
+                            nuevo_id, fecha_reg, nom_f, pat_f, mat_f, tel_fmt, mail_f, 
+                            rfc_final, reg_final, uso_final, cp_final, 
+                            f"Nac: {nacimiento}", "", "Activo", ""
+                        ]
+                        sheet_pacientes.append_row(row)
+                        st.success(f"✅ Paciente {nom_f} {pat_f} guardado.")
+                        time.sleep(1.5); st.rerun()
+
+    # ------------------------------------
+    # MÓDULO 3: FINANZAS INTEGRAL
+    # ------------------------------------
+    elif menu == "3. Planes de Tratamiento":
+        st.title("💰 Planes de Tratamiento & Finanzas")
+        
+        try:
+            pacientes = sheet_pacientes.get_all_records()
+            servicios = pd.DataFrame(sheet_servicios.get_all_records())
+            citas_raw = sheet_citas.get_all_records()
+            df_finanzas = pd.DataFrame(citas_raw)
+        except: 
+            st.error("Error cargando base de datos.")
+            st.stop()
+            
+        lista_pac = [f"{str(p['id_paciente'])} - {p['nombre']} {p['apellido_paterno']}" for p in pacientes]
+        seleccion_pac = st.selectbox("Seleccionar Paciente:", ["Buscar..."] + lista_pac)
+        
+        if seleccion_pac != "Buscar...":
+            id_p = seleccion_pac.split(" - ")[0]
+            nom_p = seleccion_pac.split(" - ")[1]
+            
+            # --- SEMÁFORO ---
+            st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
+            if not df_finanzas.empty:
+                historial = df_finanzas[df_finanzas['id_paciente'].astype(str) == id_p]
+                if not historial.empty:
+                    if 'saldo_pendiente' not in historial.columns: historial['saldo_pendiente'] = 0
+                    deuda_total = pd.to_numeric(historial['saldo_pendiente'], errors='coerce').fillna(0).sum()
+                    col_sem1, col_sem2 = st.columns(2)
+                    col_sem1.metric("Deuda Total", f"${deuda_total:,.2f}")
+                    if deuda_total > 0: col_sem2.error("🚨 SALDO PENDIENTE")
+                    else: col_sem2.success("✅ AL CORRIENTE")
+            
+            st.markdown("---")
+            st.subheader("Nuevo Plan Integral")
+            
+            # BLOQUE INTERACTIVO (FUERA DE FORM PARA CÁLCULO REAL)
+            # 1. Selección Tratamiento
+            c1, c2, c3 = st.columns(3)
+            cat_sel = "General"
+            trat_sel = ""
+            precio_lista_sug = 0.0
+            
+            if not servicios.empty and 'categoria' in servicios.columns:
+                cats = servicios['categoria'].unique()
+                cat_sel = c1.selectbox("1. Categoría", cats)
+                filt = servicios[servicios['categoria'] == cat_sel]
+                trat_sel = c2.selectbox("2. Tratamiento", filt['nombre_tratamiento'].unique())
+                item = filt[filt['nombre_tratamiento'] == trat_sel].iloc[0]
+                precio_lista_sug = float(item.get('precio_lista', 0))
+            else:
+                trat_sel = c2.text_input("Tratamiento Manual")
+                precio_lista_sug = c3.number_input("Precio Lista", 0.0)
+                
+            c3.metric("Precio de Lista Sugerido", f"${precio_lista_sug:,.2f}")
+            
+            # 2. Datos Financieros Interactivos (Metric visible)
+            st.markdown("#### 💳 Definición de Cobro")
+            col_f1, col_f2, col_f3 = st.columns(3)
+            precio_final = col_f1.number_input("Precio Final a Cobrar", value=precio_lista_sug, min_value=0.0, format="%.2f")
+            abono = col_f2.number_input("Abono Inicial", min_value=0.0, format="%.2f")
+            
+            # CÁLCULO EN TIEMPO REAL (FUERA DE FORM)
+            saldo_real = precio_final - abono
+            col_f3.metric("Saldo Pendiente (Deuda)", f"${saldo_real:,.2f}", delta_color="inverse")
+
+            # 3. Formulario Final de Registro y Agenda
+            with st.form("form_plan_final"):
+                col_d1, col_d2, col_d3 = st.columns(3)
+                doctor = col_d1.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
+                diente = col_d2.number_input("Diente (ISO)", min_value=0, max_value=85)
+                metodo = col_d3.selectbox("Método de Pago", ["Efectivo", "Tarjeta", "Transferencia", "N/A (Garantía)"])
+                
+                num_citas = st.number_input("Número de Sesiones Estimadas", min_value=1, value=1)
+                
+                st.markdown("---")
+                # AGENDA INTEGRADA
+                agendar_ahora = st.checkbox("📅 ¿Agendar Primera Sesión/Cita Ahora?")
+                
+                # Estos campos solo se usarán si el checkbox está activo, pero deben existir en el form
+                f_cita_prox = st.date_input("Fecha de Cita", datetime.now(TZ_MX))
+                h_cita_prox = st.selectbox("Hora Cita", generar_slots_tiempo())
+                
+                if st.form_submit_button("💾 REGISTRAR PLAN Y CITA"):
+                    # Lógica Descuento/Sobrecosto
+                    if precio_final > precio_lista_sug:
+                        pct = 0; nota = f"Sobrecosto: ${precio_final - precio_lista_sug}"
+                    else:
+                        diff = precio_lista_sug - precio_final
+                        pct = (diff/precio_lista_sug*100) if precio_lista_sug > 0 else 0
+                        nota = f"Sesiones Est: {num_citas}"
+
+                    fecha_pago = get_fecha_mx() if abono > 0 else ""
+                    estatus = "Pagado" if saldo_real <= 0 else "Pendiente"
+                    
+                    # 1. Guardar Registro Financiero
+                    row_fin = [
+                        int(time.time()), str(get_fecha_mx()), get_hora_mx(), id_p, nom_p,
+                        cat_sel, trat_sel, diente, doctor,
+                        precio_lista_sug, precio_final, pct, "No", 0, (precio_final*0.4),
+                        metodo, estatus, "No", nota,
+                        abono, saldo_real, fecha_pago
+                    ]
+                    sheet_citas.append_row(row_fin)
+                    
+                    msg_extra = ""
+                    # 2. Guardar Cita en Agenda (Si se seleccionó)
+                    if agendar_ahora:
+                        # id, fecha, hora, id_pac, nom, cat, trat, diente, doc, precio...
+                        # En la cita operativa ponemos precio 0 porque ya se cobró en el plan
+                        row_cita = [
+                            int(time.time())+1, str(f_cita_prox), h_cita_prox, id_p, nom_p,
+                            "Seguimiento", f"{trat_sel} (Sesión 1)", diente, doctor,
+                            0, 0, 0, "No", 0, 0, "N/A", "N/A", "No", "Cita generada desde Plan", 0, 0, ""
+                        ]
+                        sheet_citas.append_row(row_cita)
+                        msg_extra = f" y Cita Agendada para el {f_cita_prox} a las {h_cita_prox}"
+                    
+                    st.success(f"✅ Plan Financiero Registrado{msg_extra}")
+                    time.sleep(2); st.rerun()
+
+    # ------------------------------------
+    # MÓDULO 4: ASISTENCIA
+    # ------------------------------------
+    elif menu == "4. Control Asistencia":
+        st.title("⏱️ Reloj Checador")
+        col1, col2 = st.columns([1,3])
+        with col1:
+            st.markdown("### 👨‍⚕️ Dr. Emmanuel")
+            c_a, c_b = st.columns(2)
+            if c_a.button("🟢 ENTRADA"):
+                ok, m = registrar_movimiento("Dr. Emmanuel", "Entrada")
+                if ok: st.success(m)
+                else: st.warning(m)
+            if c_b.button("🔴 SALIDA"):
+                ok, m = registrar_movimiento("Dr. Emmanuel", "Salida")
+                if ok: st.success(m)
+                else: st.warning(m)
+
+if __name__ == "__main__":
+    if st.session_state.perfil is None:
+        pantalla_login()
+    elif st.session_state.perfil == "Consultorio":
+        vista_consultorio()
+    elif st.session_state.perfil == "Administracion":
+        st.title("Panel Director")
+        if st.button("Salir"): st.session_state.perfil=None; st.rerun()
