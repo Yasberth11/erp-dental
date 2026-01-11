@@ -12,7 +12,7 @@ import string
 # ==========================================
 # 1. CONFIGURACIÓN Y ESTILO ROYAL
 # ==========================================
-st.set_page_config(page_title="Royal Dental Manager", page_icon="🦷", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Royal Dental Manager", page_icon="📂", layout="wide", initial_sidebar_state="expanded")
 TZ_MX = pytz.timezone('America/Mexico_City')
 
 def cargar_estilo_royal():
@@ -54,10 +54,23 @@ except Exception as e:
     st.stop()
 
 # ==========================================
-# 3. HELPERS & SANITIZACIÓN
+# 3. HELPERS & SANITIZACIÓN (FORMATO LATINO)
 # ==========================================
-def get_fecha_mx(): return datetime.now(TZ_MX).strftime("%Y-%m-%d")
+def get_fecha_mx(): return datetime.now(TZ_MX).strftime("%d/%m/%Y")
 def get_hora_mx(): return datetime.now(TZ_MX).strftime("%H:%M:%S")
+
+def format_date_latino(date_obj):
+    return date_obj.strftime("%d/%m/%Y")
+
+def parse_date_latino(date_str):
+    # Intenta leer DD/MM/YYYY, si falla intenta YYYY-MM-DD
+    try:
+        return datetime.strptime(date_str, "%d/%m/%Y").date()
+    except:
+        try:
+            return datetime.strptime(date_str, "%Y-%m-%d").date()
+        except:
+            return None
 
 def limpiar_texto_mayus(texto):
     if not texto: return ""
@@ -71,28 +84,21 @@ def limpiar_email(texto):
     if not texto: return ""
     return texto.lower().strip()
 
-def validar_rfc(rfc):
-    # Regex básico para RFC (Permite Ñ y &)
-    pattern = r'^[A-Z&Ñ]{3,4}\d{6}[A-V1-9][A-Z1-9]\d$'
-    return re.match(pattern, rfc)
-
 def calcular_edad_completa(nacimiento_input):
     hoy = datetime.now().date()
+    nacimiento = None
+    
+    # Manejo robusto de formatos
     if isinstance(nacimiento_input, str):
-        try:
-            # Intentar formatos comunes
-            nacimiento = datetime.strptime(nacimiento_input, "%Y-%m-%d").date()
-        except:
-            try:
-                nacimiento = datetime.strptime(nacimiento_input, "%d/%m/%Y").date()
-            except:
-                return "N/A", ""
+        nacimiento = parse_date_latino(nacimiento_input)
     else:
         nacimiento = nacimiento_input
-        
-    edad = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
-    tipo = "MENOR DE EDAD" if edad < 18 else "ADULTO"
-    return edad, tipo
+
+    if nacimiento:
+        edad = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
+        tipo = "MENOR DE EDAD" if edad < 18 else "ADULTO"
+        return edad, tipo
+    return "N/A", ""
 
 def generar_id_unico(nombre, paterno, nacimiento):
     try:
@@ -129,7 +135,7 @@ def registrar_movimiento(doctor, tipo):
     try:
         data = sheet_asistencia.get_all_records()
         df = pd.DataFrame(data)
-        hoy = get_fecha_mx()
+        hoy = get_fecha_mx() # DD/MM/YYYY
         hora_actual = get_hora_mx()
         
         if not df.empty:
@@ -197,7 +203,7 @@ def vista_consultorio():
         st.session_state.perfil = None; st.rerun()
 
     # ------------------------------------
-    # MÓDULO 1: AGENDA (CON REAGENDAR)
+    # MÓDULO 1: AGENDA (LATINA Y FLEXIBLE)
     # ------------------------------------
     if menu == "1. Agenda & Citas":
         st.title("📅 Agenda del Consultorio")
@@ -205,7 +211,10 @@ def vista_consultorio():
         
         with col_cal1:
             st.markdown("### 📆 Gestión")
-            fecha_ver = st.date_input("Seleccionar Fecha", datetime.now(TZ_MX))
+            # Selector de fecha (Objeto Date)
+            fecha_ver_obj = st.date_input("Seleccionar Fecha", datetime.now(TZ_MX))
+            # Convertir a String Latino para buscar en DB
+            fecha_ver_str = format_date_latino(fecha_ver_obj)
             
             # --- AGENDAR ---
             with st.expander("➕ Agendar Cita Nueva", expanded=False):
@@ -225,9 +234,9 @@ def vista_consultorio():
                             if p_sel != "Seleccionar...":
                                 id_p = p_sel.split(" - ")[0]
                                 nom_p = p_sel.split(" - ")[1]
-                                row = [int(time.time()), str(fecha_ver), h_sel, id_p, nom_p, "General", m_sel, "", d_sel, 0, 0, 0, "No", 0, 0, "N/A", "Pendiente", "No", "", 0, 0, ""]
+                                row = [int(time.time()), fecha_ver_str, h_sel, id_p, nom_p, "General", m_sel, "", d_sel, 0, 0, 0, "No", 0, 0, "N/A", "Pendiente", "No", "", 0, 0, ""]
                                 sheet_citas.append_row(row)
-                                st.success("Agendado")
+                                st.success(f"Agendado el {fecha_ver_str}")
                                 time.sleep(1); st.rerun()
                             else: st.error("Seleccione paciente")
 
@@ -245,7 +254,7 @@ def vista_consultorio():
                                 id_temp = f"PROSPECTO-{int(time.time())}"
                                 nom_final = limpiar_texto_mayus(nombre_pros)
                                 row = [
-                                    int(time.time()), str(fecha_ver), hora_pros, id_temp, nom_final, 
+                                    int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, 
                                     "Primera Vez", motivo_pros, "", doc_pros, 
                                     precio_pros, precio_pros, 0, "No", 0, precio_pros, "Efectivo", "Pendiente", "No", f"Tel: {tel_pros}",
                                     0, precio_pros, ""
@@ -262,7 +271,8 @@ def vista_consultorio():
             
             if not df_c.empty:
                 df_c['fecha'] = df_c['fecha'].astype(str)
-                df_dia = df_c[df_c['fecha'] == str(fecha_ver)]
+                # Filtramos por el string latino DD/MM/YYYY
+                df_dia = df_c[df_c['fecha'] == fecha_ver_str]
                 
                 if not df_dia.empty:
                     lista_citas_dia = [f"{r['hora']} - {r['nombre_paciente']} ({r['tratamiento']})" for i, r in df_dia.iterrows()]
@@ -278,37 +288,38 @@ def vista_consultorio():
                             if st.button("Eliminar Cita Definitivamente"):
                                 all_vals = sheet_citas.get_all_values()
                                 for idx, row in enumerate(all_vals):
-                                    if row[1] == str(fecha_ver) and row[2] == hora_target and row[4] == nombre_target:
+                                    if row[1] == fecha_ver_str and row[2] == hora_target and row[4] == nombre_target:
                                         sheet_citas.delete_rows(idx + 1)
-                                        st.success("Cita eliminada.")
+                                        st.success("Cita eliminada y horario liberado.")
                                         time.sleep(1); st.rerun()
                                         break
                         
                         with tab_res:
+                            st.info(f"Cita Actual: {hora_target} del {fecha_ver_str}")
                             with st.form("form_reagendar"):
-                                st.write(f"Reagendando a: **{nombre_target}**")
-                                nueva_fecha = st.date_input("Nueva Fecha")
+                                nueva_fecha_obj = st.date_input("Nueva Fecha")
                                 nueva_hora = st.selectbox("Nueva Hora", generar_slots_tiempo())
                                 
                                 if st.form_submit_button("Confirmar Cambio"):
+                                    nueva_fecha_str = format_date_latino(nueva_fecha_obj)
                                     all_vals = sheet_citas.get_all_values()
                                     for idx, row in enumerate(all_vals):
-                                        if row[1] == str(fecha_ver) and row[2] == hora_target and row[4] == nombre_target:
-                                            # Actualizar Fecha (Col 2) y Hora (Col 3) - Index 1-based
+                                        if row[1] == fecha_ver_str and row[2] == hora_target and row[4] == nombre_target:
+                                            # Actualizar
                                             row_gs = idx + 1
-                                            sheet_citas.update_cell(row_gs, 2, str(nueva_fecha))
+                                            sheet_citas.update_cell(row_gs, 2, nueva_fecha_str)
                                             sheet_citas.update_cell(row_gs, 3, nueva_hora)
-                                            st.success(f"Cita movida al {nueva_fecha} a las {nueva_hora}")
-                                            time.sleep(1); st.rerun()
+                                            st.success(f"✅ Horario {hora_target} LIBERADO. Nuevo horario: {nueva_hora} ({nueva_fecha_str}) ASIGNADO.")
+                                            time.sleep(2); st.rerun()
                                             break
                 else:
-                    st.info("No hay citas para modificar hoy.")
+                    st.info("No hay citas este día.")
 
         with col_cal2:
-            st.markdown(f"#### 📋 Programación: {fecha_ver}")
+            st.markdown(f"#### 📋 Programación: {fecha_ver_str}")
             if not df_c.empty:
                 df_c['fecha'] = df_c['fecha'].astype(str)
-                df_dia = df_c[df_c['fecha'] == str(fecha_ver)]
+                df_dia = df_c[df_c['fecha'] == fecha_ver_str]
                 slots = generar_slots_tiempo()
                 for slot in slots:
                     ocupado = df_dia[df_dia['hora'].astype(str).str.contains(slot)]
@@ -325,12 +336,12 @@ def vista_consultorio():
                             </div>""", unsafe_allow_html=True)
 
     # ------------------------------------
-    # MÓDULO 2: PACIENTES
+    # MÓDULO 2: PACIENTES (EDITAR Y ERRORES)
     # ------------------------------------
     elif menu == "2. Gestión Pacientes":
         st.title("📂 Expediente Clínico")
         
-        tab_b, tab_n = st.tabs(["🔍 BUSCAR", "➕ NUEVO (ALTA)"])
+        tab_b, tab_n, tab_e = st.tabs(["🔍 BUSCAR", "➕ NUEVO (ALTA)", "✏️ EDITAR"])
         
         with tab_b:
             pacientes_raw = sheet_pacientes.get_all_records()
@@ -343,23 +354,27 @@ def vista_consultorio():
                     id_sel_str = seleccion.split(" - ")[0]
                     p_data = next((p for p in pacientes_raw if str(p['id_paciente']) == id_sel_str), None)
                     if p_data:
-                        edad, tipo_pac = calcular_edad_completa(p_data['fecha_nacimiento'])
+                        # CORRECCION KEYERROR: Usamos .get() por si no existe la columna
+                        f_nac_raw = p_data.get('fecha_nacimiento', '') 
+                        edad, tipo_pac = calcular_edad_completa(f_nac_raw)
+                        
+                        # Datos Fiscales
+                        rfc_show = p_data.get('rfc', 'N/A')
+                        
                         st.markdown(f"""
                         <div class="royal-card">
                             <h3>👤 {p_data['nombre']} {p_data['apellido_paterno']} {p_data['apellido_materno']}</h3>
                             <span style="background-color:#002B5B; color:white; padding:4px 8px; border-radius:4px;">{edad} Años - {tipo_pac}</span>
                             <br><br><b>Tel:</b> {p_data['telefono']} | <b>Email:</b> {p_data['email']}
-                            <br><b>RFC:</b> {p_data['rfc']}
+                            <br><b>RFC:</b> {rfc_show}
                         </div>""", unsafe_allow_html=True)
         
         with tab_n:
             st.markdown("#### Formulario de Alta")
-            st.info("Los nombres se guardarán en MAYÚSCULAS automáticamente.")
+            # Interruptor dinámico
+            requiere_factura = st.checkbox("¿Requiere Factura? (Mostrar campos fiscales SAT)", key="chk_alta")
             
-            # Interruptor dinámico fuera del form
-            requiere_factura = st.checkbox("¿Requiere Factura? (Mostrar campos fiscales SAT)")
-            
-            with st.form("alta_paciente_v18", clear_on_submit=True):
+            with st.form("alta_paciente_v19", clear_on_submit=True):
                 c_nom, c_pat, c_mat = st.columns(3)
                 nombre = c_nom.text_input("Nombre(s)")
                 paterno = c_pat.text_input("Apellido Paterno")
@@ -367,7 +382,6 @@ def vista_consultorio():
                 
                 c_nac, c_tel, c_mail = st.columns(3)
                 nacimiento = c_nac.date_input("Fecha Nacimiento", min_value=datetime(1920,1,1), max_value=datetime.now())
-                # BLINDAJE TELEFONO (MAX 10)
                 tel = c_tel.text_input("Teléfono (10 dígitos)", max_chars=10)
                 email = c_mail.text_input("Email")
                 
@@ -375,24 +389,17 @@ def vista_consultorio():
                     st.markdown("---")
                     st.markdown("**Datos Fiscales (SAT)**")
                     c_f1, c_f2 = st.columns(2)
-                    # BLINDAJE RFC (MAX 13)
-                    rfc = c_f1.text_input("RFC", max_chars=13, help="Máximo 13 caracteres")
-                    # BLINDAJE CP (MAX 5)
-                    cp = c_f2.text_input("C.P.", max_chars=5, help="Exactamente 5 números")
+                    rfc = c_f1.text_input("RFC", max_chars=13)
+                    cp = c_f2.text_input("C.P.", max_chars=5)
                     regimen = st.selectbox("Régimen Fiscal", get_regimenes_fiscales())
                     uso = st.selectbox("Uso CFDI", get_usos_cfdi())
-                    metodo_pago_sat = st.selectbox("Método de Pago SAT", ["PUE - Pago en una sola exhibición", "PPD - Pago en parcialidades o diferido"])
+                    metodo_pago_sat = st.selectbox("Método de Pago SAT", ["PUE - Pago en una sola exhibición", "PPD - Pago en parcialidades"])
                 
                 if st.form_submit_button("💾 GUARDAR PACIENTE"):
                     errores = []
-                    # Validaciones
-                    if not tel.isdigit() or len(tel) != 10: errores.append("❌ Teléfono incorrecto (deben ser 10 números).")
-                    if not nombre or not paterno: errores.append("❌ Nombre y Apellido obligatorios.")
+                    if not tel.isdigit() or len(tel) != 10: errores.append("❌ Teléfono incorrecto.")
+                    if not nombre or not paterno: errores.append("❌ Nombre/Apellido obligatorios.")
                     
-                    if requiere_factura:
-                        if len(cp) != 5 or not cp.isdigit(): errores.append("❌ Código Postal incorrecto (deben ser 5 números).")
-                        if len(rfc) < 12: errores.append("❌ RFC incompleto.")
-                        
                     if errores:
                         for e in errores: st.error(e)
                     else:
@@ -417,7 +424,8 @@ def vista_consultorio():
                         nuevo_id = generar_id_unico(nom_f, pat_f, nacimiento)
                         fecha_reg = get_fecha_mx()
                         tel_fmt = f"{tel[:2]}-{tel[2:6]}-{tel[6:]}"
-                        f_nac_str = nacimiento.strftime("%Y-%m-%d")
+                        # GUARDAR FECHA EN FORMATO LATINO
+                        f_nac_str = format_date_latino(nacimiento)
                         
                         row = [
                             nuevo_id, fecha_reg, nom_f, pat_f, mat_f, tel_fmt, mail_f, 
@@ -427,6 +435,36 @@ def vista_consultorio():
                         sheet_pacientes.append_row(row)
                         st.success(f"✅ Paciente {nom_f} guardado.")
                         time.sleep(1.5); st.rerun()
+
+        with tab_e:
+            st.markdown("#### ✏️ Modificar Paciente")
+            pacientes_raw = sheet_pacientes.get_all_records()
+            lista_edit = [f"{str(p['id_paciente'])} - {p['nombre']} {p['apellido_paterno']}" for p in pacientes_raw]
+            sel_edit = st.selectbox("Buscar Paciente a Editar:", ["Seleccionar..."] + lista_edit)
+            
+            if sel_edit != "Seleccionar...":
+                id_target = sel_edit.split(" - ")[0]
+                p_edit = next((p for p in pacientes_raw if str(p['id_paciente']) == id_target), None)
+                
+                if p_edit:
+                    st.info("Modifique los campos necesarios y guarde.")
+                    with st.form("form_editar"):
+                        e_nom = st.text_input("Nombre", p_edit['nombre'])
+                        e_pat = st.text_input("Apellido Paterno", p_edit['apellido_paterno'])
+                        e_tel = st.text_input("Teléfono", p_edit['telefono'])
+                        e_rfc = st.text_input("RFC", p_edit.get('rfc', ''))
+                        
+                        if st.form_submit_button("💾 ACTUALIZAR REGISTRO"):
+                            # Buscar fila
+                            cell = sheet_pacientes.find(id_target)
+                            row_idx = cell.row
+                            # Actualizar columnas específicas (Nombre=3, Pat=4, Tel=6, RFC=8)
+                            sheet_pacientes.update_cell(row_idx, 3, limpiar_texto_mayus(e_nom))
+                            sheet_pacientes.update_cell(row_idx, 4, limpiar_texto_mayus(e_pat))
+                            sheet_pacientes.update_cell(row_idx, 6, formatear_telefono(e_tel))
+                            sheet_pacientes.update_cell(row_idx, 8, e_rfc.upper())
+                            st.success("Datos actualizados correctamente.")
+                            time.sleep(1.5); st.rerun()
 
     # ------------------------------------
     # MÓDULO 3: PLANES
@@ -489,7 +527,6 @@ def vista_consultorio():
             saldo_real = precio_final - abono
             col_f3.metric("Saldo Pendiente (Deuda)", f"${saldo_real:,.2f}", delta_color="inverse")
 
-            # --- AGENDA OCULTA/DINÁMICA FUERA DEL FORM ---
             agendar_ahora = st.checkbox("📅 ¿Agendar Primera Sesión/Cita Ahora?")
 
             with st.form("form_plan_final"):
@@ -499,16 +536,13 @@ def vista_consultorio():
                 metodo = col_d3.selectbox("Método de Pago", ["Efectivo", "Tarjeta", "Transferencia", "N/A (Garantía)"])
                 num_citas = st.number_input("Número de Sesiones Estimadas", min_value=1, value=1)
                 
-                # Campos de agenda (solo si se activó el checkbox, aunque en el form se declaran para leerse)
-                # Si el checkbox está False, estos valores no importan pero deben declararse para que el script no falle
                 if agendar_ahora:
                     st.markdown("---")
                     st.markdown("##### 🗓️ Detalles de Cita")
-                    f_cita_prox = st.date_input("Fecha de Cita", datetime.now(TZ_MX))
+                    f_cita_prox_obj = st.date_input("Fecha de Cita", datetime.now(TZ_MX))
                     h_cita_prox = st.selectbox("Hora Cita", generar_slots_tiempo())
                 else:
-                    # Dummy values
-                    f_cita_prox = datetime.now(TZ_MX)
+                    f_cita_prox_obj = datetime.now(TZ_MX)
                     h_cita_prox = "00:00"
 
                 if st.form_submit_button("💾 REGISTRAR"):
@@ -523,7 +557,7 @@ def vista_consultorio():
                     estatus = "Pagado" if saldo_real <= 0 else "Pendiente"
                     
                     row_fin = [
-                        int(time.time()), str(get_fecha_mx()), get_hora_mx(), id_p, nom_p,
+                        int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p,
                         cat_sel, trat_sel, diente, doctor,
                         precio_lista_sug, precio_final, pct, "No", 0, (precio_final*0.4),
                         metodo, estatus, "No", nota,
@@ -533,13 +567,14 @@ def vista_consultorio():
                     
                     msg_extra = ""
                     if agendar_ahora:
+                        f_str = format_date_latino(f_cita_prox_obj)
                         row_cita = [
-                            int(time.time())+1, str(f_cita_prox), h_cita_prox, id_p, nom_p,
+                            int(time.time())+1, f_str, h_cita_prox, id_p, nom_p,
                             "Seguimiento", f"{trat_sel} (Sesión 1)", diente, doctor,
                             0, 0, 0, "No", 0, 0, "N/A", "N/A", "No", "Cita generada desde Plan", 0, 0, ""
                         ]
                         sheet_citas.append_row(row_cita)
-                        msg_extra = f" y Cita Agendada el {f_cita_prox}"
+                        msg_extra = f" y Cita Agendada el {f_str}"
                     
                     st.success(f"✅ Plan Registrado{msg_extra}")
                     time.sleep(2); st.rerun()
