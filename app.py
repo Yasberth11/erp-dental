@@ -26,18 +26,16 @@ def cargar_estilo_royal():
         div[data-baseweb="input"] > div, div[data-baseweb="select"] > div { border-radius: 8px; background-color: #FFFFFF; border: 1px solid #D1D1D1; }
         
         /* Semáforos Financieros */
-        .semaforo-verde { background-color: #D4EDDA; color: #155724; padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.8em; }
-        .semaforo-amarillo { background-color: #FFF3CD; color: #856404; padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.8em; }
-        .semaforo-rojo { background-color: #F8D7DA; color: #721c24; padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.8em; }
+        .semaforo-verde { color: #155724; background-color: #D4EDDA; padding: 5px; border-radius: 5px; }
+        .semaforo-rojo { color: #721c24; background-color: #F8D7DA; padding: 5px; border-radius: 5px; }
         </style>
     """, unsafe_allow_html=True)
 
 cargar_estilo_royal()
 
 # ==========================================
-# 2. CONEXIÓN DB (CACHE INTELIGENTE)
+# 2. CONEXIÓN DB
 # ==========================================
-# Aumentamos el TTL a 10s para evitar recargas constantes que "sacan" al usuario
 @st.cache_resource(ttl=10)
 def get_database_connection():
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
@@ -56,10 +54,23 @@ except Exception as e:
     st.stop()
 
 # ==========================================
-# 3. HELPERS & LÓGICA FINANCIERA
+# 3. HELPERS & SANITIZACIÓN
 # ==========================================
 def get_fecha_mx(): return datetime.now(TZ_MX).strftime("%Y-%m-%d")
 def get_hora_mx(): return datetime.now(TZ_MX).strftime("%H:%M:%S")
+
+def limpiar_texto_mayus(texto):
+    if not texto: return ""
+    # Mapa de acentos a letras sin acento (Excepto Ñ)
+    remplaces = {'Á':'A', 'É':'E', 'Í':'I', 'Ó':'O', 'Ú':'U', 'á':'A', 'é':'E', 'í':'I', 'ó':'O', 'ú':'U'}
+    texto = texto.upper()
+    for k, v in remplaces.items():
+        texto = texto.replace(k, v)
+    return texto
+
+def limpiar_email(texto):
+    if not texto: return ""
+    return texto.lower().strip()
 
 def calcular_edad_completa(nacimiento):
     hoy = datetime.now().date()
@@ -78,7 +89,6 @@ def generar_id_unico(nombre, paterno, nacimiento):
         return f"P-{int(time.time())}"
 
 def formatear_telefono(numero):
-    # Elimina todo lo que no sea dígito
     return re.sub(r'\D', '', str(numero))
 
 def generar_slots_tiempo():
@@ -91,13 +101,7 @@ def generar_slots_tiempo():
     return slots
 
 def get_regimenes_fiscales():
-    return [
-        "605 - Sueldos y Salarios", 
-        "612 - Personas Físicas con Actividades Empresariales", 
-        "626 - RESICO", 
-        "616 - Sin obligaciones fiscales", 
-        "601 - General de Ley Personas Morales"
-    ]
+    return ["605 - Sueldos y Salarios", "612 - Personas Físicas con Actividades Empresariales", "626 - RESICO", "616 - Sin obligaciones fiscales", "601 - General de Ley Personas Morales"]
 
 def get_usos_cfdi():
     return ["D01 - Honorarios médicos, dentales", "S01 - Sin efectos fiscales", "G03 - Gastos en general", "CP01 - Pagos"]
@@ -112,7 +116,6 @@ def registrar_movimiento(doctor, tipo):
         hoy = get_fecha_mx()
         hora_actual = get_hora_mx()
         
-        # Normalizar columnas
         if not df.empty:
             df['fecha'] = df['fecha'].astype(str)
             df['doctor'] = df['doctor'].astype(str)
@@ -178,7 +181,7 @@ def vista_consultorio():
         st.session_state.perfil = None; st.rerun()
 
     # ------------------------------------
-    # MÓDULO 1: AGENDA (CON CITA PROSPECTO)
+    # MÓDULO 1: AGENDA
     # ------------------------------------
     if menu == "1. Agenda & Citas":
         st.title("📅 Agenda del Consultorio")
@@ -192,9 +195,7 @@ def vista_consultorio():
             tab_reg, tab_new = st.tabs(["Paciente Registrado", "Prospecto/Nuevo"])
             
             with tab_reg:
-                # Usamos form para evitar recargas constantes
                 with st.form("cita_registrada"):
-                    # Optimización: Cargar pacientes solo una vez
                     pacientes_raw = sheet_pacientes.get_all_records()
                     lista_pac = [f"{str(p['id_paciente'])} - {p['nombre']} {p['apellido_paterno']}" for p in pacientes_raw] if pacientes_raw else []
                     
@@ -207,7 +208,6 @@ def vista_consultorio():
                         if p_sel != "Seleccionar...":
                             id_p = p_sel.split(" - ")[0]
                             nom_p = p_sel.split(" - ")[1]
-                            # Columnas Base + 3 Nuevas Financieras (Pagado, Saldo, FechaPago)
                             row = [int(time.time()), str(fecha_ver), h_sel, id_p, nom_p, "General", m_sel, "", d_sel, 0, 0, 0, "No", 0, 0, "N/A", "Pendiente", "No", "", 0, 0, ""]
                             sheet_citas.append_row(row)
                             st.success("✅ Cita Agendada")
@@ -218,28 +218,27 @@ def vista_consultorio():
                 st.caption("Pacientes sin expediente (Solo revisión).")
                 with st.form("cita_prospecto"):
                     nombre_pros = st.text_input("Nombre Completo")
-                    # Restricción de caracteres visual (aunque validamos abajo)
                     tel_pros = st.text_input("Teléfono", max_chars=10, help="Solo 10 números")
                     hora_pros = st.selectbox("Hora", generar_slots_tiempo())
                     motivo_pros = st.text_input("Motivo", "Revisión (Primera Vez)")
-                    precio_pros = st.number_input("Costo Estimado", value=100.0)
+                    precio_pros = st.number_input("Costo Estimado", value=100.0, min_value=0.0)
                     doc_pros = st.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
                     
                     if st.form_submit_button("Agendar Prospecto"):
                         if nombre_pros and len(tel_pros) == 10:
                             id_temp = f"PROSPECTO-{int(time.time())}"
-                            # Agregamos 0, precio_pros, fecha_hoy a las nuevas columnas financieras
+                            # Nombre Mayus
+                            nom_final = limpiar_texto_mayus(nombre_pros)
                             row = [
-                                int(time.time()), str(fecha_ver), hora_pros, id_temp, nombre_pros, 
+                                int(time.time()), str(fecha_ver), hora_pros, id_temp, nom_final, 
                                 "Primera Vez", motivo_pros, "", doc_pros, 
                                 precio_pros, precio_pros, 0, "No", 0, precio_pros, "Efectivo", "Pendiente", "No", f"Tel: {tel_pros}",
-                                0, precio_pros, "" # Nuevas columnas: Pagado=0, Saldo=Total, Fecha=""
+                                0, precio_pros, ""
                             ]
                             sheet_citas.append_row(row)
                             st.success("✅ Cita de Prospecto Agendada")
                             time.sleep(1); st.rerun()
-                        else:
-                            st.error("Nombre obligatorio y Teléfono debe ser de 10 dígitos")
+                        else: st.error("Nombre obligatorio y Teléfono debe ser de 10 dígitos")
 
         with col_cal2:
             st.markdown(f"#### 📋 Programación: {fecha_ver}")
@@ -250,7 +249,6 @@ def vista_consultorio():
                 if not df_c.empty:
                     df_c['fecha'] = df_c['fecha'].astype(str)
                     df_dia = df_c[df_c['fecha'] == str(fecha_ver)]
-                    
                     slots = generar_slots_tiempo()
                     for slot in slots:
                         ocupado = df_dia[df_dia['hora'].astype(str).str.contains(slot)]
@@ -264,12 +262,11 @@ def vista_consultorio():
                                 <div style="padding:10px; margin-bottom:5px; background-color:#fff; border-left:5px solid {color}; box-shadow:0 2px 4px rgba(0,0,0,0.05); border-radius:4px;">
                                     <b>{slot} | {r['nombre_paciente']}</b><br>
                                     <span style="color:#666; font-size:0.9em;">{r['tratamiento']} - {r['doctor_atendio']}</span>
-                                </div>
-                                """, unsafe_allow_html=True)
+                                </div>""", unsafe_allow_html=True)
             except: st.warning("Error leyendo agenda.")
 
     # ------------------------------------
-    # MÓDULO 2: PACIENTES (ESTABILIDAD TOTAL)
+    # MÓDULO 2: PACIENTES (SANITIZACIÓN Y OCULTAMIENTO)
     # ------------------------------------
     elif menu == "2. Gestión Pacientes":
         st.title("🦷 Expediente Clínico")
@@ -294,18 +291,16 @@ def vista_consultorio():
 
                         st.markdown(f"""
                         <div class="royal-card">
-                            <h3>👤 {p_data['nombre']} {p_data['apellido_paterno']}</h3>
+                            <h3>👤 {p_data['nombre']} {p_data['apellido_paterno']} {p_data['apellido_materno']}</h3>
                             <span style="background-color:#002B5B; color:white; padding:4px 8px; border-radius:4px;">{edad} Años - {tipo_pac}</span>
                             <br><br><b>Tel:</b> {p_data['telefono']} | <b>Email:</b> {p_data['email']}
                             <br><b>RFC:</b> {p_data['rfc']}
-                        </div>
-                        """, unsafe_allow_html=True)
+                        </div>""", unsafe_allow_html=True)
         
         with tab_n:
             st.markdown("#### Formulario de Alta")
-            
-            # BLOQUEO DE RECARGA: Todo dentro de un form estático
-            with st.form("alta_paciente_static", clear_on_submit=True):
+            with st.form("alta_paciente_v15", clear_on_submit=True):
+                st.info("Los nombres se guardarán en MAYÚSCULAS automáticamente.")
                 c_nom, c_pat, c_mat = st.columns(3)
                 nombre = c_nom.text_input("Nombre(s)")
                 paterno = c_pat.text_input("Apellido Paterno")
@@ -313,18 +308,22 @@ def vista_consultorio():
                 
                 c_nac, c_tel, c_mail = st.columns(3)
                 nacimiento = c_nac.date_input("Fecha Nacimiento", min_value=datetime(1920,1,1), max_value=datetime.now())
-                # RESTRICCIÓN FÍSICA DE 10 DIGITOS
-                tel = c_tel.text_input("Teléfono (10 dígitos)", max_chars=10, help="Solo números. Máximo 10.")
+                tel = c_tel.text_input("Teléfono (10 dígitos)", max_chars=10)
                 email = c_mail.text_input("Email")
                 
                 st.markdown("---")
-                requiere_factura = st.checkbox("¿Requiere Factura? (Activar para llenar datos)")
+                # LÓGICA DE OCULTAMIENTO FISCAL
+                requiere_factura = st.checkbox("¿Requiere Factura? (Habilitar campos fiscales)")
                 
-                # Nota: Dentro de un form, la interactividad es limitada. 
-                # Si activan el checkbox, los campos se mostrarán vacíos o se llenarán al enviar.
-                # Para mejor UX en forms estáticos, mostramos los campos siempre pero indicamos opcionalidad.
-                st.caption("Datos Fiscales (Llenar solo si requiere factura)")
+                # Campos Fiscales
                 c_f1, c_f2 = st.columns(2)
+                
+                # IMPORTANTE: En Streamlit Forms, no podemos ocultar condicionalmente de forma dinámica 
+                # sin recargar. Pero visualmente podemos indicarlo. 
+                # Si quieres ocultamiento estricto, debemos sacar esto del form, pero perderías la estabilidad.
+                # Solución Intermedia: Se muestran siempre dentro del form para estabilidad, pero se indica su uso.
+                
+                st.caption("Llenar datos fiscales SOLO si marcó la casilla anterior:")
                 rfc = c_f1.text_input("RFC")
                 cp = c_f2.text_input("C.P.")
                 regimen = st.selectbox("Régimen Fiscal", get_regimenes_fiscales())
@@ -332,8 +331,7 @@ def vista_consultorio():
                 
                 if st.form_submit_button("💾 GUARDAR PACIENTE"):
                     errores = []
-                    
-                    # Validación Estricta
+                    # 1. Validaciones
                     if not tel.isdigit() or len(tel) != 10:
                         errores.append("❌ El teléfono debe contener EXACTAMENTE 10 números.")
                     if not nombre or not paterno:
@@ -342,36 +340,46 @@ def vista_consultorio():
                     if errores:
                         for e in errores: st.error(e)
                     else:
-                        # Lógica Fiscal
-                        rfc_final = rfc if requiere_factura and rfc else "XAXX010101000"
-                        cp_final = cp if requiere_factura else "N/A"
-                        reg_final = regimen if requiere_factura else "616 - Sin obligaciones fiscales"
-                        uso_final = uso if requiere_factura else "S01 - Sin efectos fiscales"
+                        # 2. Sanitización
+                        nom_f = limpiar_texto_mayus(nombre)
+                        pat_f = limpiar_texto_mayus(paterno)
+                        mat_f = limpiar_texto_mayus(materno)
+                        mail_f = limpiar_email(email)
                         
-                        nuevo_id = generar_id_unico(nombre, paterno, nacimiento)
+                        # 3. Lógica Fiscal
+                        if requiere_factura:
+                            rfc_final = rfc.upper()
+                            cp_final = cp
+                            reg_final = regimen.split(" - ")[0]
+                            uso_final = uso.split(" - ")[0]
+                        else:
+                            rfc_final = "XAXX010101000"
+                            cp_final = "N/A"
+                            reg_final = "616"
+                            uso_final = "S01"
+                        
+                        nuevo_id = generar_id_unico(nom_f, pat_f, nacimiento)
                         fecha_reg = get_fecha_mx()
                         tel_fmt = f"{tel[:2]}-{tel[2:6]}-{tel[6:]}"
                         
                         row = [
-                            nuevo_id, fecha_reg, nombre, paterno, materno, tel_fmt, email, 
-                            rfc_final, reg_final.split(" - ")[0], uso_final.split(" - ")[0], cp_final, 
+                            nuevo_id, fecha_reg, nom_f, pat_f, mat_f, tel_fmt, mail_f, 
+                            rfc_final, reg_final, uso_final, cp_final, 
                             f"Nac: {nacimiento}", "", "Activo", ""
                         ]
                         sheet_pacientes.append_row(row)
-                        st.success(f"✅ Paciente guardado con éxito. ID: {nuevo_id}")
+                        st.success(f"✅ Paciente {nom_f} {pat_f} guardado.")
                         time.sleep(1.5); st.rerun()
 
     # ------------------------------------
-    # MÓDULO 3: FINANZAS Y TRATAMIENTOS (SEMÁFORO)
+    # MÓDULO 3: FINANZAS (MATEMÁTICA CORREGIDA)
     # ------------------------------------
     elif menu == "3. Planes de Tratamiento":
         st.title("💰 Planes de Tratamiento & Finanzas")
         
-        # Cargar Datos
         try:
             pacientes = sheet_pacientes.get_all_records()
             servicios = pd.DataFrame(sheet_servicios.get_all_records())
-            # Cargamos Citas para ver deudas anteriores
             citas_raw = sheet_citas.get_all_records()
             df_finanzas = pd.DataFrame(citas_raw)
         except: 
@@ -385,49 +393,26 @@ def vista_consultorio():
             id_p = seleccion_pac.split(" - ")[0]
             nom_p = seleccion_pac.split(" - ")[1]
             
-            # --- SEMÁFORO DE PAGOS DEL PACIENTE ---
+            # --- SEMÁFORO ---
             st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
             if not df_finanzas.empty:
-                # Filtrar historial del paciente
                 historial = df_finanzas[df_finanzas['id_paciente'].astype(str) == id_p]
-                
                 if not historial.empty:
-                    # Asegurar columnas numéricas nuevas
-                    # Si las columnas no existen en el DF (porque acabas de crearlas en Sheets), rellenar con 0
                     if 'saldo_pendiente' not in historial.columns: historial['saldo_pendiente'] = 0
-                    
                     deuda_total = pd.to_numeric(historial['saldo_pendiente'], errors='coerce').fillna(0).sum()
-                    
-                    col_sem1, col_sem2, col_sem3 = st.columns(3)
+                    col_sem1, col_sem2 = st.columns(2)
                     col_sem1.metric("Deuda Total", f"${deuda_total:,.2f}")
-                    
-                    if deuda_total == 0:
-                        col_sem2.success("✅ CLIENTE AL CORRIENTE")
-                    else:
-                        # Calcular días de morosidad del cargo más antiguo con saldo
-                        pendientes = historial[pd.to_numeric(historial['saldo_pendiente'], errors='coerce') > 0]
-                        if not pendientes.empty:
-                            fecha_cargo = pd.to_datetime(pendientes.iloc[0]['fecha'], errors='coerce')
-                            dias_retraso = (datetime.now() - fecha_cargo).days
-                            
-                            if dias_retraso < 7:
-                                col_sem2.warning(f"⚠️ PAGO PENDIENTE ({dias_retraso} días)")
-                            else:
-                                col_sem2.error(f"🚨 MOROSO ({dias_retraso} días de retraso)")
-                        else:
-                            col_sem2.success("✅ AL CORRIENTE")
-                            
-            st.markdown("---")
+                    if deuda_total > 0: col_sem2.error("🚨 SALDO PENDIENTE")
+                    else: col_sem2.success("✅ AL CORRIENTE")
             
-            # --- COTIZADOR ---
+            st.markdown("---")
             st.subheader("Nuevo Tratamiento")
             
-            # Selectores fuera de form para dinamismo
+            # Selectores Dinámicos
             c1, c2, c3 = st.columns(3)
-            
             cat_sel = "General"
             trat_sel = ""
-            precio_lista = 0.0
+            precio_lista_sug = 0.0
             
             if not servicios.empty and 'categoria' in servicios.columns:
                 cats = servicios['categoria'].unique()
@@ -435,58 +420,59 @@ def vista_consultorio():
                 filt = servicios[servicios['categoria'] == cat_sel]
                 trat_sel = c2.selectbox("Tratamiento", filt['nombre_tratamiento'].unique())
                 item = filt[filt['nombre_tratamiento'] == trat_sel].iloc[0]
-                precio_lista = float(item.get('precio_lista', 0))
+                precio_lista_sug = float(item.get('precio_lista', 0))
             else:
                 trat_sel = c2.text_input("Tratamiento Manual")
-                precio_lista = c3.number_input("Precio Lista", 0.0)
+                precio_lista_sug = c3.number_input("Precio Lista", 0.0)
                 
-            c3.metric("Precio de Lista", f"${precio_lista:,.2f}")
+            c3.metric("Precio de Lista Sugerido", f"${precio_lista_sug:,.2f}")
             
-            with st.form("form_finanzas"):
+            with st.form("form_finanzas_v15"):
                 col_f1, col_f2 = st.columns(2)
-                precio_final = col_f1.number_input("Precio Final a Cobrar", value=precio_lista)
                 
-                # LÓGICA SOBRECOSTO
-                nota_sobrecosto = ""
-                descuento = 0.0
-                pct = 0.0
+                # PRECIO FINAL EDITABLE (Permite $0 para garantías)
+                precio_final = col_f1.number_input("Precio Final a Cobrar", value=precio_lista_sug, min_value=0.0, format="%.2f")
                 
-                if precio_final > precio_lista:
-                    st.warning("⚠️ El precio final es mayor al de lista. El descuento será 0 y se anotará el sobrecosto.")
-                    nota_sobrecosto = " (SOBRECOSTO APLICADO)"
-                    descuento = 0.0
-                else:
-                    descuento = precio_lista - precio_final
-                    pct = (descuento / precio_lista * 100) if precio_lista > 0 else 0
-                    st.caption(f"Descuento: ${descuento:,.2f} ({pct:.1f}%)")
+                # ABONO (No puede ser negativo)
+                abono = col_f2.number_input("Abono Inicial", min_value=0.0, format="%.2f")
                 
-                abono = col_f2.number_input("Abono Inicial", min_value=0.0, max_value=precio_final)
-                
-                saldo = precio_final - abono
-                estatus = "Pagado" if saldo <= 0 else "Pendiente"
-                
-                st.info(f"💵 Saldo Pendiente: ${saldo:,.2f}")
-                
+                # MATEMÁTICA CORREGIDA AQUÍ
+                # Se calcula visualmente fuera, pero para el form lo mostraremos como info estática o recalculamos al submit
+                st.caption("Nota: El saldo se calculará como (Precio Final - Abono).")
+
                 c_d1, c_d2 = st.columns(2)
                 doctor = c_d1.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
-                diente = c_d2.number_input("Diente (ISO)", 0, help="Sistema FDI (Ej. 11, 48). 0 para General.")
-                st.caption("Nota: Diente (ISO) es el estándar internacional usado por dentistas.")
+                # Diente ISO limitado a 85
+                diente = c_d2.number_input("Diente (ISO)", min_value=0, max_value=85, help="Máximo 85. 0 para General.")
                 
-                metodo = st.selectbox("Método de Pago", ["Efectivo", "Tarjeta", "Transferencia"])
+                metodo = st.selectbox("Método de Pago", ["Efectivo", "Tarjeta", "Transferencia", "N/A (Garantía)"])
                 
                 if st.form_submit_button("💾 REGISTRAR"):
-                    # Columnas nuevas: 20, 21, 22
-                    fecha_pago = get_fecha_mx() if abono > 0 else ""
+                    # 1. Cálculo Real
+                    saldo_real = precio_final - abono
+                    estatus = "Pagado" if saldo_real <= 0 else "Pendiente"
                     
+                    # 2. Descuento
+                    if precio_final > precio_lista_sug:
+                        desc_val = 0
+                        pct = 0
+                        nota_extra = f"Nota: Sobrecosto de ${precio_final - precio_lista_sug}"
+                    else:
+                        desc_val = precio_lista_sug - precio_final
+                        pct = (desc_val/precio_lista_sug*100) if precio_lista_sug > 0 else 0
+                        nota_extra = ""
+                        
+                    # 3. Guardar
+                    fecha_pago = get_fecha_mx() if abono > 0 else ""
                     row = [
                         int(time.time()), str(get_fecha_mx()), get_hora_mx(), id_p, nom_p,
                         cat_sel, trat_sel, diente, doctor,
-                        precio_lista, precio_final, pct, "No", 0, (precio_final*0.4),
-                        metodo, estatus, "No", f"Nota: {nota_sobrecosto}",
-                        abono, saldo, fecha_pago
+                        precio_lista_sug, precio_final, pct, "No", 0, (precio_final*0.4),
+                        metodo, estatus, "No", nota_extra,
+                        abono, saldo_real, fecha_pago
                     ]
                     sheet_citas.append_row(row)
-                    st.success("Tratamiento registrado con control financiero.")
+                    st.success(f"Tratamiento registrado. Saldo pendiente: ${saldo_real:,.2f}")
                     time.sleep(1.5); st.rerun()
 
     # ------------------------------------
