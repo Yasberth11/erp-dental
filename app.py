@@ -10,27 +10,43 @@ import random
 import string
 
 # ==========================================
-# 1. CONFIGURACIÓN Y ESTILO ROYAL
+# 1. CONFIGURACIÓN Y ESTILO ROYAL (MEJORADO)
 # ==========================================
-st.set_page_config(page_title="Royal Dental Manager", page_icon="📂", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Royal Dental Manager", page_icon="🦷", layout="wide", initial_sidebar_state="expanded")
 TZ_MX = pytz.timezone('America/Mexico_City')
 
 def cargar_estilo_royal():
     st.markdown("""
         <style>
+        /* General */
         .stApp { background-color: #F4F6F6; }
-        .royal-card { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid #D4AF37; margin-bottom: 20px; }
         h1, h2, h3, h4 { color: #002B5B !important; font-family: 'Helvetica Neue', sans-serif; }
-        .stButton>button { background-color: #D4AF37; color: #002B5B; border: none; font-weight: bold; width: 100%; transition: all 0.3s; }
-        .stButton>button:hover { background-color: #B5952F; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        
+        /* Botones */
+        .stButton>button { background-color: #D4AF37; color: #002B5B; border: none; font-weight: bold; border-radius: 8px; transition: all 0.3s; }
+        .stButton>button:hover { background-color: #B5952F; color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transform: translateY(-2px); }
+        
+        /* Inputs */
         div[data-baseweb="input"] > div, div[data-baseweb="select"] > div { border-radius: 8px; background-color: #FFFFFF; border: 1px solid #D1D1D1; }
         
-        /* Semáforos Financieros */
-        .semaforo-verde { color: #155724; background-color: #D4EDDA; padding: 5px; border-radius: 5px; font-weight: bold; }
-        .semaforo-rojo { color: #721c24; background-color: #F8D7DA; padding: 5px; border-radius: 5px; font-weight: bold; }
+        /* TARJETAS (NUEVO UI/UX) */
+        .card-paciente {
+            background-color: white; padding: 20px; border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-left: 6px solid #D4AF37; margin-bottom: 15px;
+        }
+        .card-cita {
+            background-color: white; padding: 15px; border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 5px solid #002B5B; margin-bottom: 10px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .card-prospecto {
+            background-color: #FFF8E1; padding: 15px; border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 5px solid #FF9800; margin-bottom: 10px;
+        }
         
-        /* Tablas */
-        div[data-testid="stDataFrame"] { border: 1px solid #ddd; border-radius: 5px; }
+        /* Semáforos Financieros */
+        .semaforo-verde { color: #155724; background-color: #D4EDDA; padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.9em; }
+        .semaforo-rojo { color: #721c24; background-color: #F8D7DA; padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.9em; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -39,7 +55,7 @@ cargar_estilo_royal()
 # ==========================================
 # 2. CONEXIÓN DB
 # ==========================================
-@st.cache_resource(ttl=10)
+@st.cache_resource(ttl=60)
 def get_database_connection():
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     credentials = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
@@ -57,7 +73,7 @@ except Exception as e:
     st.stop()
 
 # ==========================================
-# 3. HELPERS & SANITIZACIÓN (FORMATO LATINO)
+# 3. HELPERS & SANITIZACIÓN (MEJORADO)
 # ==========================================
 def get_fecha_mx(): return datetime.now(TZ_MX).strftime("%d/%m/%Y")
 def get_hora_mx(): return datetime.now(TZ_MX).strftime("%H:%M:%S")
@@ -66,10 +82,11 @@ def format_date_latino(date_obj):
     return date_obj.strftime("%d/%m/%Y")
 
 def parse_date_latino(date_str):
-    try: return datetime.strptime(date_str, "%d/%m/%Y").date()
-    except:
-        try: return datetime.strptime(date_str, "%Y-%m-%d").date()
-        except: return None
+    if not date_str: return None
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%y"):
+        try: return datetime.strptime(str(date_str), fmt).date()
+        except: continue
+    return None
 
 def limpiar_texto_mayus(texto):
     if not texto: return ""
@@ -82,14 +99,18 @@ def limpiar_email(texto):
     if not texto: return ""
     return texto.lower().strip()
 
+# --- FIX: CÁLCULO DE EDAD ROBUSTO ---
 def calcular_edad_completa(nacimiento_input):
-    hoy = datetime.now().date()
-    nacimiento = parse_date_latino(nacimiento_input) if isinstance(nacimiento_input, str) else nacimiento_input
-    if nacimiento:
-        edad = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
-        tipo = "MENOR DE EDAD" if edad < 18 else "ADULTO"
-        return edad, tipo
-    return "N/A", ""
+    if not nacimiento_input: return "N/A", ""
+    try:
+        hoy = datetime.now().date()
+        nacimiento = parse_date_latino(nacimiento_input)
+        if nacimiento:
+            edad = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
+            tipo = "👶 MENOR" if edad < 18 else "🧑 ADULTO"
+            return edad, tipo
+    except: pass
+    return "Error", "Fecha Inválida"
 
 def generar_id_unico(nombre, paterno, nacimiento):
     try:
@@ -105,8 +126,8 @@ def formatear_telefono(numero):
 
 def generar_slots_tiempo():
     slots = []
-    hora_actual = datetime.strptime("08:00", "%H:%M")
-    hora_fin = datetime.strptime("18:30", "%H:%M")
+    hora_actual = datetime.strptime("09:00", "%H:%M")
+    hora_fin = datetime.strptime("19:00", "%H:%M")
     while hora_actual <= hora_fin:
         slots.append(hora_actual.strftime("%H:%M"))
         hora_actual += timedelta(minutes=30)
@@ -169,416 +190,423 @@ if 'perfil' not in st.session_state: st.session_state.perfil = None
 def pantalla_login():
     col_izq, col_centro, col_der = st.columns([1, 2, 1])
     with col_centro:
-        st.markdown("""<div style="background-color: #002B5B; padding: 30px; border-radius: 15px; text-align: center;"><h2 style="color: #D4AF37 !important;">ROYAL DENTAL</h2></div><br>""", unsafe_allow_html=True)
-        tipo = st.selectbox("Perfil", ["Seleccionar...", "🏥 CONSULTORIO", "💼 ADMINISTRACIÓN"])
-        pwd = st.text_input("Contraseña", type="password")
-        if st.button("INGRESAR"):
+        st.markdown("""<div style="background-color: #002B5B; padding: 40px; border-radius: 20px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+        <h1 style="color: #D4AF37 !important; margin:0;">ROYAL DENTAL</h1>
+        <p style="color: white;">Manager ERP v2.0</p>
+        </div><br>""", unsafe_allow_html=True)
+        
+        tipo = st.selectbox("Seleccione Perfil", ["Seleccionar...", "🏥 CONSULTORIO", "💼 ADMINISTRACIÓN"])
+        pwd = st.text_input("Contraseña de Acceso", type="password")
+        
+        if st.button("INGRESAR AL SISTEMA"):
             if tipo == "🏥 CONSULTORIO" and pwd == "ROYALCLINIC":
                 st.session_state.perfil = "Consultorio"; st.rerun()
             elif tipo == "💼 ADMINISTRACIÓN" and pwd == "ROYALADMIN":
                 st.session_state.perfil = "Administracion"; st.rerun()
-            else: st.error("Acceso Denegado")
+            else: st.error("⛔ Credenciales Incorrectas")
 
 # ==========================================
 # 6. VISTA CONSULTORIO
 # ==========================================
 def vista_consultorio():
-    st.sidebar.markdown("### 🏥 Royal Dental")
-    st.sidebar.caption(f"Fecha: {get_fecha_mx()}")
-    
-    menu = st.sidebar.radio("Menú", 
-        ["1. Agenda & Citas", "2. Gestión Pacientes", "3. Planes de Tratamiento", "4. Control Asistencia"])
-    
-    if st.sidebar.button("Cerrar Sesión"):
-        st.session_state.perfil = None; st.rerun()
+    with st.sidebar:
+        st.image("https://cdn-icons-png.flaticon.com/512/3004/3004458.png", width=80)
+        st.markdown("### 🏥 Royal Dental")
+        st.caption(f"📅 {get_fecha_mx()}")
+        st.markdown("---")
+        menu = st.radio("Navegación", 
+            ["1. Agenda & Citas", "2. Gestión Pacientes", "3. Planes & Finanzas", "4. Control Asistencia"])
+        st.markdown("---")
+        if st.button("🔓 Cerrar Sesión"):
+            st.session_state.perfil = None; st.rerun()
 
     # ------------------------------------
-    # MÓDULO 1: AGENDA (CON BUSCADOR GLOBAL)
+    # MÓDULO 1: AGENDA (VISUALMENTE MEJORADA)
     # ------------------------------------
     if menu == "1. Agenda & Citas":
         st.title("📅 Agenda del Consultorio")
         
-        # --- BUSCADOR GLOBAL DE CITAS ---
-        with st.expander("🔍 BUSCADOR DE CITAS (¿Cuándo le toca a...?)", expanded=False):
-            st.info("Escribe el nombre del paciente para ver su historial completo de citas.")
-            q_cita = st.text_input("Nombre del Paciente:")
+        # --- BUSCADOR GLOBAL ---
+        with st.expander("🔍 BUSCADOR DE HISTORIAL (Pacientes/Prospectos)", expanded=False):
+            q_cita = st.text_input("Escribe el nombre del paciente:")
             if q_cita:
                 try:
                     all_citas = sheet_citas.get_all_records()
                     df_all = pd.DataFrame(all_citas)
                     if not df_all.empty:
-                        # Filtrar
                         df_res = df_all[df_all['nombre_paciente'].str.contains(q_cita, case=False, na=False)]
                         if not df_res.empty:
-                            st.write(f"Encontradas {len(df_res)} citas:")
-                            # Mostrar tabla simplificada
-                            st.dataframe(df_res[['fecha', 'hora', 'nombre_paciente', 'tratamiento', 'doctor_atendio', 'estado_pago']])
-                        else:
-                            st.warning("No se encontraron citas con ese nombre.")
-                except Exception as e:
-                    st.error(f"Error en búsqueda: {e}")
+                            st.dataframe(df_res[['fecha', 'hora', 'nombre_paciente', 'tratamiento', 'doctor_atendio', 'estado_pago']], use_container_width=True)
+                        else: st.warning("No se encontraron coincidencias.")
+                except Exception as e: st.error(f"Error: {e}")
 
-        st.markdown("---")
-        
-        col_cal1, col_cal2 = st.columns([1, 2.5])
+        col_cal1, col_cal2 = st.columns([1.2, 2.8])
         
         with col_cal1:
-            st.markdown("### 📆 Gestión")
-            # FECHA CON FORMATO LATINO VISUAL
-            fecha_ver_obj = st.date_input("Seleccionar Fecha", datetime.now(TZ_MX), format="DD/MM/YYYY")
+            st.markdown("### 🛠️ Panel de Control")
+            fecha_ver_obj = st.date_input("Ver Agenda del día:", datetime.now(TZ_MX), format="DD/MM/YYYY")
             fecha_ver_str = format_date_latino(fecha_ver_obj)
             
-            # --- AGENDAR ---
-            with st.expander("➕ Agendar Cita Nueva", expanded=False):
-                tab_reg, tab_new = st.tabs(["Registrado", "Prospecto"])
-                
-                with tab_reg:
-                    with st.form("cita_registrada"):
-                        pacientes_raw = sheet_pacientes.get_all_records()
-                        lista_pac = [f"{str(p['id_paciente'])} - {p['nombre']} {p['apellido_paterno']}" for p in pacientes_raw] if pacientes_raw else []
-                        
-                        p_sel = st.selectbox("Paciente", ["Seleccionar..."] + lista_pac)
-                        h_sel = st.selectbox("Hora", generar_slots_tiempo())
-                        m_sel = st.text_input("Motivo", "Revisión / Continuación")
-                        d_sel = st.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
-                        
-                        if st.form_submit_button("Agendar"):
-                            if p_sel != "Seleccionar...":
-                                id_p = p_sel.split(" - ")[0]
-                                nom_p = p_sel.split(" - ")[1]
-                                row = [int(time.time()), fecha_ver_str, h_sel, id_p, nom_p, "General", m_sel, "", d_sel, 0, 0, 0, "No", 0, 0, "N/A", "Pendiente", "No", "", 0, 0, ""]
-                                sheet_citas.append_row(row)
-                                st.success(f"Agendado el {fecha_ver_str}")
-                                time.sleep(1); st.rerun()
-                            else: st.error("Seleccione paciente")
+            st.markdown("---")
+            st.caption("Acciones Rápidas")
+            with st.popover("➕ Nueva Cita (Registrado)"):
+                with st.form("cita_registrada"):
+                    pacientes_raw = sheet_pacientes.get_all_records()
+                    lista_pac = [f"{str(p['id_paciente'])} - {p['nombre']} {p['apellido_paterno']}" for p in pacientes_raw] if pacientes_raw else []
+                    p_sel = st.selectbox("Paciente", ["Seleccionar..."] + lista_pac)
+                    h_sel = st.selectbox("Hora", generar_slots_tiempo())
+                    m_sel = st.text_input("Motivo", "Revisión")
+                    d_sel = st.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
+                    
+                    if st.form_submit_button("Agendar Cita"):
+                        if p_sel != "Seleccionar...":
+                            id_p = p_sel.split(" - ")[0]
+                            nom_p = p_sel.split(" - ")[1]
+                            row = [int(time.time()), fecha_ver_str, h_sel, id_p, nom_p, "General", m_sel, "", d_sel, 0, 0, 0, "No", 0, 0, "N/A", "Pendiente", "No", "", 0, 0, ""]
+                            sheet_citas.append_row(row)
+                            st.toast("✅ Cita Agendada Exitosamente")
+                            time.sleep(1); st.rerun()
 
-                with tab_new:
-                    with st.form("cita_prospecto"):
-                        nombre_pros = st.text_input("Nombre")
-                        tel_pros = st.text_input("Tel (10)", max_chars=10)
-                        hora_pros = st.selectbox("Hora", generar_slots_tiempo())
-                        motivo_pros = st.text_input("Motivo", "Revisión 1ra Vez")
-                        precio_pros = st.number_input("Costo", value=100.0, min_value=0.0)
-                        doc_pros = st.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
-                        
-                        if st.form_submit_button("Agendar Prospecto"):
-                            if nombre_pros and len(tel_pros) == 10:
-                                id_temp = f"PROSPECTO-{int(time.time())}"
-                                nom_final = limpiar_texto_mayus(nombre_pros)
-                                row = [
-                                    int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, 
-                                    "Primera Vez", motivo_pros, "", doc_pros, 
-                                    precio_pros, precio_pros, 0, "No", 0, precio_pros, "Efectivo", "Pendiente", "No", f"Tel: {tel_pros}",
-                                    0, precio_pros, ""
-                                ]
-                                sheet_citas.append_row(row)
-                                st.success("Agendado")
-                                time.sleep(1); st.rerun()
-                            else: st.error("Datos incorrectos")
-            
-            # --- MODIFICAR CITAS ---
-            st.markdown("### 🔄 Modificar Agenda")
+            with st.popover("👤 Nuevo Prospecto (1ra Vez)"):
+                with st.form("cita_prospecto"):
+                    nombre_pros = st.text_input("Nombre Completo")
+                    tel_pros = st.text_input("Teléfono", max_chars=10)
+                    hora_pros = st.selectbox("Hora Cita", generar_slots_tiempo())
+                    motivo_pros = st.text_input("Motivo", "Valoración")
+                    precio_pros = st.number_input("Costo Consulta", value=200.0)
+                    doc_pros = st.selectbox("Doctor Asignado", ["Dr. Emmanuel", "Dra. Mónica"])
+                    
+                    if st.form_submit_button("Guardar Prospecto"):
+                        if nombre_pros:
+                            id_temp = f"PROSPECTO-{int(time.time())}"
+                            row = [int(time.time()), fecha_ver_str, hora_pros, id_temp, limpiar_texto_mayus(nombre_pros), "Primera Vez", motivo_pros, "", doc_pros, precio_pros, precio_pros, 0, "No", 0, 0, "Efectivo", "Pendiente", "No", f"Tel: {tel_pros}", 0, precio_pros, ""]
+                            sheet_citas.append_row(row)
+                            st.toast("✅ Prospecto Agendado")
+                            time.sleep(1); st.rerun()
+
+        with col_cal2:
+            st.markdown(f"### 📆 Calendario: {fecha_ver_str}")
+            # Visualización tipo Calendario/Tarjetas
             citas_data = sheet_citas.get_all_records()
             df_c = pd.DataFrame(citas_data)
             
+            slots = generar_slots_tiempo()
+            
             if not df_c.empty:
                 df_c['fecha'] = df_c['fecha'].astype(str)
                 df_dia = df_c[df_c['fecha'] == fecha_ver_str]
-                
-                if not df_dia.empty:
-                    lista_citas_dia = [f"{r['hora']} - {r['nombre_paciente']} ({r['tratamiento']})" for i, r in df_dia.iterrows()]
-                    cita_sel = st.selectbox("Seleccionar Cita:", ["Seleccionar..."] + lista_citas_dia)
-                    
-                    if cita_sel != "Seleccionar...":
-                        hora_target = cita_sel.split(" - ")[0]
-                        nombre_target = cita_sel.split(" - ")[1].split(" (")[0]
-                        
-                        tab_del, tab_res = st.tabs(["❌ Cancelar", "🗓️ Reagendar"])
-                        
-                        with tab_del:
-                            if st.button("Eliminar Cita Definitivamente"):
-                                all_vals = sheet_citas.get_all_values()
-                                for idx, row in enumerate(all_vals):
-                                    if row[1] == fecha_ver_str and row[2] == hora_target and row[4] == nombre_target:
-                                        sheet_citas.delete_rows(idx + 1)
-                                        st.success("Cita eliminada y horario liberado.")
-                                        time.sleep(1); st.rerun()
-                                        break
-                        
-                        with tab_res:
-                            st.info(f"Cita Actual: {hora_target} del {fecha_ver_str}")
-                            with st.form("form_reagendar"):
-                                nueva_fecha_obj = st.date_input("Nueva Fecha", format="DD/MM/YYYY")
-                                nueva_hora = st.selectbox("Nueva Hora", generar_slots_tiempo())
-                                
-                                if st.form_submit_button("Confirmar Cambio"):
-                                    nueva_fecha_str = format_date_latino(nueva_fecha_obj)
-                                    all_vals = sheet_citas.get_all_values()
-                                    for idx, row in enumerate(all_vals):
-                                        if row[1] == fecha_ver_str and row[2] == hora_target and row[4] == nombre_target:
-                                            row_gs = idx + 1
-                                            sheet_citas.update_cell(row_gs, 2, nueva_fecha_str)
-                                            sheet_citas.update_cell(row_gs, 3, nueva_hora)
-                                            st.success(f"✅ Horario {hora_target} LIBERADO. Nuevo horario: {nueva_hora} ({nueva_fecha_str}) ASIGNADO.")
-                                            time.sleep(2); st.rerun()
-                                            break
-                else:
-                    st.info("No hay citas este día.")
+            else: df_dia = pd.DataFrame()
 
-        with col_cal2:
-            st.markdown(f"#### 📋 Programación: {fecha_ver_str}")
-            if not df_c.empty:
-                df_c['fecha'] = df_c['fecha'].astype(str)
-                df_dia = df_c[df_c['fecha'] == fecha_ver_str]
-                slots = generar_slots_tiempo()
-                for slot in slots:
-                    ocupado = df_dia[df_dia['hora'].astype(str).str.contains(slot)]
-                    if ocupado.empty:
-                        st.markdown(f"""<div style="padding:8px; border-bottom:1px solid #eee; display:flex; align-items:center;"><span style="font-weight:bold; color:#aaa; width:60px;">{slot}</span><span style="color:#ddd; font-size:0.9em;">Disponible</span></div>""", unsafe_allow_html=True)
-                    else:
-                        for _, r in ocupado.iterrows():
-                            es_prospecto = "PROSPECTO" in str(r['id_paciente'])
-                            color = "#FF5722" if es_prospecto else "#002B5B"
-                            st.markdown(f"""
-                            <div style="padding:10px; margin-bottom:5px; background-color:#fff; border-left:5px solid {color}; box-shadow:0 2px 4px rgba(0,0,0,0.05); border-radius:4px;">
-                                <b>{slot} | {r['nombre_paciente']}</b><br>
-                                <span style="color:#666; font-size:0.9em;">{r['tratamiento']} - {r['doctor_atendio']}</span>
-                            </div>""", unsafe_allow_html=True)
+            for slot in slots:
+                ocupado = df_dia[df_dia['hora'].astype(str).str.contains(slot)] if not df_dia.empty else pd.DataFrame()
+                
+                if ocupado.empty:
+                    st.markdown(f"""
+                        <div style="padding:10px; margin-bottom:8px; border-bottom:1px dashed #ddd; color:#aaa; display:flex;">
+                            <b style="width:70px;">{slot}</b> <span>Disponible</span>
+                        </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    for _, r in ocupado.iterrows():
+                        es_prospecto = "PROSPECTO" in str(r['id_paciente'])
+                        css_class = "card-prospecto" if es_prospecto else "card-cita"
+                        icono = "👤❓" if es_prospecto else "🦷"
+                        
+                        st.markdown(f"""
+                        <div class="{css_class}">
+                            <div>
+                                <strong style="font-size:1.2em; color:#002B5B;">{slot}</strong><br>
+                                <span style="color:#666;">{icono} {r['nombre_paciente']}</span>
+                            </div>
+                            <div style="text-align:right;">
+                                <b>{r['tratamiento']}</b><br>
+                                <small>{r['doctor_atendio']}</small>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
     # ------------------------------------
-    # MÓDULO 2: PACIENTES
+    # MÓDULO 2: PACIENTES (SEXO Y CARDS)
     # ------------------------------------
     elif menu == "2. Gestión Pacientes":
         st.title("📂 Expediente Clínico")
         
         tab_b, tab_n, tab_e = st.tabs(["🔍 BUSCAR", "➕ NUEVO (ALTA)", "✏️ EDITAR"])
         
+        # --- PESTAÑA BUSCAR (CON CARDS) ---
         with tab_b:
             pacientes_raw = sheet_pacientes.get_all_records()
-            if not pacientes_raw: st.warning("Sin pacientes")
+            if not pacientes_raw: st.info("Base de datos vacía.")
             else:
-                lista_busqueda = [f"{str(p['id_paciente'])} - {p['nombre']} {p['apellido_paterno']}" for p in pacientes_raw]
-                seleccion = st.selectbox("Seleccionar:", ["Buscar..."] + lista_busqueda)
+                busqueda = st.text_input("🔍 Buscar por Nombre:", placeholder="Escribe para filtrar...")
                 
-                if seleccion != "Buscar...":
-                    id_sel_str = seleccion.split(" - ")[0]
-                    p_data = next((p for p in pacientes_raw if str(p['id_paciente']) == id_sel_str), None)
-                    if p_data:
-                        f_nac_raw = p_data.get('fecha_nacimiento', '') 
-                        edad, tipo_pac = calcular_edad_completa(f_nac_raw)
-                        rfc_show = p_data.get('rfc', 'N/A')
+                for p in pacientes_raw:
+                    nombre_completo = f"{p['nombre']} {p['apellido_paterno']} {p['apellido_materno']}"
+                    if busqueda.lower() in nombre_completo.lower():
+                        # Lógica de Iconos Sexo
+                        sexo_icon = "👩" if str(p.get('sexo','')).startswith("F") else "👨"
+                        f_nac = p.get('fecha_nacimiento', '')
+                        edad, tipo_pac = calcular_edad_completa(f_nac)
+                        rfc_val = p.get('rfc', 'N/A')
+                        
+                        # Card HTML
                         st.markdown(f"""
-                        <div class="royal-card">
-                            <h3>👤 {p_data['nombre']} {p_data['apellido_paterno']} {p_data['apellido_materno']}</h3>
-                            <span style="background-color:#002B5B; color:white; padding:4px 8px; border-radius:4px;">{edad} Años - {tipo_pac}</span>
-                            <br><br><b>Tel:</b> {p_data['telefono']} | <b>Email:</b> {p_data['email']}
-                            <br><b>RFC:</b> {rfc_show}
-                        </div>""", unsafe_allow_html=True)
-        
+                        <div class="card-paciente">
+                            <h3 style="margin:0;">{sexo_icon} {nombre_completo}</h3>
+                            <span class="semaforo-verde">{tipo_pac}: {edad} Años</span>
+                            <hr style="margin:10px 0;">
+                            <div style="display:flex; justify-content:space-between;">
+                                <span>📞 <b>Tel:</b> {p['telefono']}</span>
+                                <span>📧 <b>Email:</b> {p['email']}</span>
+                                <span>🏛️ <b>RFC:</b> {rfc_val}</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+        # --- PESTAÑA ALTA (CON SEXO) ---
         with tab_n:
-            st.markdown("#### Formulario de Alta")
-            requiere_factura = st.checkbox("¿Requiere Factura? (Mostrar campos fiscales SAT)", key="chk_alta")
+            st.subheader("Alta de Paciente")
+            requiere_factura = st.checkbox("¿Requiere Factura?", key="chk_alta")
             
-            with st.form("alta_paciente_v20", clear_on_submit=True):
-                c_nom, c_pat, c_mat = st.columns(3)
-                nombre = c_nom.text_input("Nombre(s)")
-                paterno = c_pat.text_input("Apellido Paterno")
-                materno = c_mat.text_input("Apellido Materno")
+            with st.form("alta_paciente_v2", clear_on_submit=True):
+                c1, c2, c3 = st.columns(3)
+                nombre = c1.text_input("Nombre(s)")
+                paterno = c2.text_input("Apellido Paterno")
+                materno = c3.text_input("Apellido Materno")
                 
-                c_nac, c_tel, c_mail = st.columns(3)
-                nacimiento = c_nac.date_input("Fecha Nacimiento", min_value=datetime(1920,1,1), max_value=datetime.now(), format="DD/MM/YYYY")
-                tel = c_tel.text_input("Teléfono (10 dígitos)", max_chars=10)
-                email = c_mail.text_input("Email")
-                
+                c4, c5, c6 = st.columns(3)
+                sexo = c4.selectbox("Sexo", ["Masculino", "Femenino"])
+                nacimiento = c5.date_input("Fecha Nacimiento", min_value=datetime(1930,1,1), max_value=datetime.now(), format="DD/MM/YYYY")
+                tel = c6.text_input("Móvil (10 dígitos)", max_chars=10)
+                email = st.text_input("Email")
+
+                # Campos Fiscales Condicionales
                 if requiere_factura:
-                    st.markdown("---")
-                    st.markdown("**Datos Fiscales (SAT)**")
-                    c_f1, c_f2 = st.columns(2)
-                    rfc = c_f1.text_input("RFC", max_chars=13)
-                    cp = c_f2.text_input("C.P.", max_chars=5)
+                    st.info("📝 Datos Fiscales")
+                    fc1, fc2 = st.columns(2)
+                    rfc = fc1.text_input("RFC", max_chars=13)
+                    cp = fc2.text_input("Código Postal", max_chars=5)
                     regimen = st.selectbox("Régimen Fiscal", get_regimenes_fiscales())
                     uso = st.selectbox("Uso CFDI", get_usos_cfdi())
-                    metodo_pago_sat = st.selectbox("Método de Pago SAT", ["PUE - Pago en una sola exhibición", "PPD - Pago en parcialidades"])
+                    nota_fiscal = st.text_input("Nota Fiscal / Método Pago SAT", "PUE - Una sola exhibición")
                 
                 if st.form_submit_button("💾 GUARDAR PACIENTE"):
-                    errores = []
-                    if not tel.isdigit() or len(tel) != 10: errores.append("❌ Teléfono incorrecto.")
-                    if not nombre or not paterno: errores.append("❌ Nombre/Apellido obligatorios.")
-                    
-                    if errores:
-                        for e in errores: st.error(e)
-                    else:
+                    if nombre and paterno and len(tel)==10:
+                        # Procesar Datos
                         nom_f = limpiar_texto_mayus(nombre)
                         pat_f = limpiar_texto_mayus(paterno)
                         mat_f = limpiar_texto_mayus(materno)
-                        mail_f = limpiar_email(email)
-                        
-                        if requiere_factura:
-                            rfc_final = rfc.upper()
-                            cp_final = cp
-                            reg_final = regimen.split(" - ")[0]
-                            uso_final = uso.split(" - ")[0]
-                            nota_fiscal = f"Método SAT: {metodo_pago_sat}"
-                        else:
-                            rfc_final = "XAXX010101000"
-                            cp_final = "N/A"
-                            reg_final = "616"
-                            uso_final = "S01"
-                            nota_fiscal = ""
-                        
-                        nuevo_id = generar_id_unico(nom_f, pat_f, nacimiento)
-                        fecha_reg = get_fecha_mx()
-                        tel_fmt = f"{tel[:2]}-{tel[2:6]}-{tel[6:]}"
                         f_nac_str = format_date_latino(nacimiento)
                         
-                        row = [nuevo_id, fecha_reg, nom_f, pat_f, mat_f, tel_fmt, mail_f, rfc_final, reg_final, uso_final, cp_final, nota_fiscal, "", "Activo", f_nac_str]
-                        sheet_pacientes.append_row(row)
-                        st.success(f"✅ Paciente {nom_f} guardado.")
-                        time.sleep(1.5); st.rerun()
+                        if requiere_factura:
+                            rfc_f = rfc.upper()
+                            reg_f = regimen.split(" - ")[0]
+                            uso_f = uso.split(" - ")[0]
+                            cp_f = cp
+                            nota_f = nota_fiscal
+                        else:
+                            rfc_f, reg_f, uso_f, cp_f, nota_f = "XAXX010101000", "616", "S01", "N/A", ""
 
+                        new_id = generar_id_unico(nom_f, pat_f, nacimiento)
+                        # ORDEN EXACTO GOOGLE SHEETS:
+                        # id, fecha_reg, nom, pat, mat, tel, email, rfc, reg, uso, cp, nota, SEXO, estado, nacimiento
+                        row = [new_id, get_fecha_mx(), nom_f, pat_f, mat_f, formatear_telefono(tel), limpiar_email(email),
+                               rfc_f, reg_f, uso_f, cp_f, nota_f, sexo, "Activo", f_nac_str]
+                        
+                        sheet_pacientes.append_row(row)
+                        st.success(f"✅ Paciente {nom_f} registrado con éxito.")
+                        time.sleep(1.5); st.rerun()
+                    else:
+                        st.error("Faltan datos obligatorios (Nombre, Apellido, Teléfono 10 dígitos)")
+
+        # --- PESTAÑA EDITAR (CON BOTÓN FISCAL) ---
         with tab_e:
-            st.markdown("#### ✏️ Modificar Paciente")
-            pacientes_raw = sheet_pacientes.get_all_records()
+            st.subheader("✏️ Modificar / Completar Datos")
             lista_edit = [f"{str(p['id_paciente'])} - {p['nombre']} {p['apellido_paterno']}" for p in pacientes_raw]
-            sel_edit = st.selectbox("Buscar Paciente a Editar:", ["Seleccionar..."] + lista_edit)
+            sel_edit = st.selectbox("Seleccionar Paciente:", ["Buscar..."] + lista_edit)
             
-            if sel_edit != "Seleccionar...":
+            if sel_edit != "Buscar...":
                 id_target = sel_edit.split(" - ")[0]
                 p_edit = next((p for p in pacientes_raw if str(p['id_paciente']) == id_target), None)
+                
                 if p_edit:
                     with st.form("form_editar"):
-                        e_nom = st.text_input("Nombre", p_edit['nombre'])
-                        e_pat = st.text_input("Apellido Paterno", p_edit['apellido_paterno'])
+                        col_e1, col_e2 = st.columns(2)
+                        e_nom = col_e1.text_input("Nombre", p_edit['nombre'])
+                        e_pat = col_e2.text_input("Apellido Paterno", p_edit['apellido_paterno'])
                         e_tel = st.text_input("Teléfono", p_edit['telefono'])
-                        e_rfc = st.text_input("RFC", p_edit.get('rfc', ''))
-                        if st.form_submit_button("💾 ACTUALIZAR REGISTRO"):
+                        
+                        # --- MEJORA: AGREGAR FISCALES SI NO TIENE ---
+                        rfc_actual = p_edit.get('rfc', '')
+                        agregar_fiscal = False
+                        
+                        if rfc_actual == "XAXX010101000" or rfc_actual == "":
+                            st.warning("Este paciente no tiene datos fiscales personalizados.")
+                            agregar_fiscal = st.checkbox("📝 Agregar Datos Fiscales Ahora")
+                        
+                        e_rfc_new = rfc_actual
+                        e_cp_new = p_edit.get('cp', '')
+                        
+                        if agregar_fiscal or (rfc_actual != "XAXX010101000" and rfc_actual != ""):
+                            col_f1, col_f2 = st.columns(2)
+                            e_rfc_new = col_f1.text_input("RFC", p_edit.get('rfc', ''))
+                            e_cp_new = col_f2.text_input("C.P.", p_edit.get('cp', ''))
+
+                        if st.form_submit_button("ACTUALIZAR"):
                             cell = sheet_pacientes.find(id_target)
-                            sheet_pacientes.update_cell(cell.row, 3, limpiar_texto_mayus(e_nom))
-                            sheet_pacientes.update_cell(cell.row, 4, limpiar_texto_mayus(e_pat))
-                            sheet_pacientes.update_cell(cell.row, 6, formatear_telefono(e_tel))
-                            sheet_pacientes.update_cell(cell.row, 8, e_rfc.upper())
-                            st.success("Datos actualizados.")
-                            time.sleep(1.5); st.rerun()
+                            row_idx = cell.row
+                            # Actualizar celdas específicas
+                            sheet_pacientes.update_cell(row_idx, 3, e_nom) # Nombre
+                            sheet_pacientes.update_cell(row_idx, 4, e_pat) # Paterno
+                            sheet_pacientes.update_cell(row_idx, 6, formatear_telefono(e_tel)) # Tel
+                            if e_rfc_new != rfc_actual:
+                                sheet_pacientes.update_cell(row_idx, 8, e_rfc_new.upper()) # RFC
+                                sheet_pacientes.update_cell(row_idx, 11, e_cp_new) # CP
+                            st.success("✅ Registro actualizado.")
+                            time.sleep(1); st.rerun()
 
     # ------------------------------------
-    # MÓDULO 3: PLANES (CON HISTORIAL)
+    # MÓDULO 3: FINANZAS (CON COBRANZA)
     # ------------------------------------
-    elif menu == "3. Planes de Tratamiento":
-        st.title("💰 Planes de Tratamiento")
+    elif menu == "3. Planes & Finanzas":
+        st.title("💰 Finanzas & Cobranza")
         
-        try:
-            pacientes = sheet_pacientes.get_all_records()
-            servicios = pd.DataFrame(sheet_servicios.get_all_records())
-            citas_raw = sheet_citas.get_all_records()
-            df_finanzas = pd.DataFrame(citas_raw)
-        except: 
-            st.error("Error cargando base de datos.")
-            st.stop()
-            
+        tab_plan, tab_abono = st.tabs(["🦷 NUEVO PLAN (PRESUPUESTO)", "💳 CAJA (ABONAR A DEUDA)"])
+
+        pacientes = sheet_pacientes.get_all_records()
         lista_pac = [f"{str(p['id_paciente'])} - {p['nombre']} {p['apellido_paterno']}" for p in pacientes]
-        seleccion_pac = st.selectbox("Seleccionar Paciente:", ["Buscar..."] + lista_pac)
         
-        if seleccion_pac != "Buscar...":
-            id_p = seleccion_pac.split(" - ")[0]
-            nom_p = seleccion_pac.split(" - ")[1]
+        # --- SUBMÓDULO DE COBRANZA (NUEVO) ---
+        with tab_abono:
+            st.subheader("Registro de Pagos (Sin Cita Médica)")
+            st.info("Utilice esta sección cuando el paciente viene solo a pagar una deuda anterior.")
             
-            st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
-            if not df_finanzas.empty:
-                historial = df_finanzas[df_finanzas['id_paciente'].astype(str) == id_p]
-                if not historial.empty:
-                    if 'saldo_pendiente' not in historial.columns: historial['saldo_pendiente'] = 0
-                    deuda_total = pd.to_numeric(historial['saldo_pendiente'], errors='coerce').fillna(0).sum()
-                    col_sem1, col_sem2 = st.columns(2)
-                    col_sem1.metric("Deuda Total", f"${deuda_total:,.2f}")
-                    if deuda_total > 0: col_sem2.error("🚨 SALDO PENDIENTE")
-                    else: col_sem2.success("✅ AL CORRIENTE")
+            p_abono = st.selectbox("Seleccionar Deudor:", ["Buscar..."] + lista_pac, key="abono_sel")
+            
+            if p_abono != "Buscar...":
+                id_p_abono = p_abono.split(" - ")[0]
+                citas_raw = sheet_citas.get_all_records()
+                df_fin = pd.DataFrame(citas_raw)
+                
+                # Filtrar deudas pendientes
+                if not df_fin.empty:
+                    # Asegurar tipos numéricos
+                    df_fin['saldo_pendiente'] = pd.to_numeric(df_fin['saldo_pendiente'], errors='coerce').fillna(0)
+                    df_fin['monto_pagado'] = pd.to_numeric(df_fin['monto_pagado'], errors='coerce').fillna(0)
                     
-                    # --- NUEVO: HISTORIAL DETALLADO (SOLUCIÓN "DE QUÉ DEBO") ---
-                    with st.expander("📜 Historial Detallado de Movimientos (Desglose)", expanded=False):
-                        if 'tratamiento' in historial.columns and 'precio_final' in historial.columns:
-                            st.dataframe(historial[['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente', 'estado_pago']])
-                        else:
-                            st.write("No hay datos suficientes para desglose.")
-            
-            st.markdown("---")
-            st.subheader("Nuevo Plan Integral")
-            
-            c1, c2, c3 = st.columns(3)
-            cat_sel = "General"
-            trat_sel = ""
-            precio_lista_sug = 0.0
-            
-            if not servicios.empty and 'categoria' in servicios.columns:
-                cats = servicios['categoria'].unique()
-                cat_sel = c1.selectbox("1. Categoría", cats)
-                filt = servicios[servicios['categoria'] == cat_sel]
-                trat_sel = c2.selectbox("2. Tratamiento", filt['nombre_tratamiento'].unique())
-                item = filt[filt['nombre_tratamiento'] == trat_sel].iloc[0]
-                precio_lista_sug = float(item.get('precio_lista', 0))
-            else:
-                trat_sel = c2.text_input("Tratamiento Manual")
-                precio_lista_sug = c3.number_input("Precio Lista", 0.0)
-                
-            c3.metric("Precio de Lista Sugerido", f"${precio_lista_sug:,.2f}")
-            
-            st.markdown("#### 💳 Definición de Cobro")
-            col_f1, col_f2, col_f3 = st.columns(3)
-            precio_final = col_f1.number_input("Precio Final a Cobrar", value=precio_lista_sug, min_value=0.0, format="%.2f")
-            abono = col_f2.number_input("Abono Inicial", min_value=0.0, format="%.2f")
-            saldo_real = precio_final - abono
-            col_f3.metric("Saldo Pendiente (Deuda)", f"${saldo_real:,.2f}", delta_color="inverse")
-
-            agendar_ahora = st.checkbox("📅 ¿Agendar Primera Sesión/Cita Ahora?")
-
-            with st.form("form_plan_final"):
-                col_d1, col_d2, col_d3 = st.columns(3)
-                doctor = col_d1.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
-                diente = col_d2.number_input("Diente (ISO)", min_value=0, max_value=85)
-                metodo = col_d3.selectbox("Método de Pago", ["Efectivo", "Tarjeta", "Transferencia", "N/A (Garantía)"])
-                num_citas = st.number_input("Número de Sesiones Estimadas", min_value=1, value=1)
-                
-                if agendar_ahora:
-                    st.markdown("---")
-                    st.markdown("##### 🗓️ Detalles de Cita")
-                    f_cita_prox_obj = st.date_input("Fecha de Cita", datetime.now(TZ_MX), format="DD/MM/YYYY")
-                    h_cita_prox = st.selectbox("Hora Cita", generar_slots_tiempo())
-                else:
-                    f_cita_prox_obj = datetime.now(TZ_MX)
-                    h_cita_prox = "00:00"
-
-                if st.form_submit_button("💾 REGISTRAR"):
-                    if precio_final > precio_lista_sug:
-                        pct = 0; nota = f"Sobrecosto: ${precio_final - precio_lista_sug}"
+                    deudas = df_fin[(df_fin['id_paciente'].astype(str) == id_p_abono) & (df_fin['saldo_pendiente'] > 0)]
+                    
+                    if not deudas.empty:
+                        st.write(f"Deudas encontradas: {len(deudas)}")
+                        
+                        opciones_deuda = []
+                        for idx, row in deudas.iterrows():
+                            txt = f"Fecha: {row['fecha']} | Tx: {row['tratamiento']} | Debe: ${row['saldo_pendiente']}"
+                            opciones_deuda.append((idx, txt)) # Guardamos el index original del DF
+                        
+                        seleccion_deuda = st.selectbox("Seleccione la deuda a abonar:", [x[1] for x in opciones_deuda])
+                        
+                        # Recuperar el índice seleccionado
+                        idx_sel = next(x[0] for x in opciones_deuda if x[1] == seleccion_deuda)
+                        row_sel = deudas.loc[idx_sel]
+                        
+                        monto_pendiente = float(row_sel['saldo_pendiente'])
+                        
+                        with st.form("form_abono"):
+                            st.metric("Saldo Actual de esta nota", f"${monto_pendiente:,.2f}")
+                            abono_input = st.number_input("Monto a Abonar HOY", min_value=1.0, max_value=monto_pendiente)
+                            metodo_abono = st.selectbox("Forma de Pago", ["Efectivo", "Tarjeta", "Transferencia"])
+                            
+                            if st.form_submit_button("💵 REGISTRAR PAGO"):
+                                # Calcular nuevos valores
+                                nuevo_pagado = float(row_sel['monto_pagado']) + abono_input
+                                nuevo_pendiente = monto_pendiente - abono_input
+                                nuevo_estado = "Pagado" if nuevo_pendiente <= 0 else "Pendiente"
+                                nueva_fecha_pago = get_fecha_mx()
+                                
+                                # Encontrar la fila en Google Sheets
+                                # Usamos el ID de cita (columna 1) para mayor precisión si existe, si no, combinación fecha/hora
+                                # Aquí asumimos búsqueda por timestamp 'id' que es Columna A (1)
+                                try:
+                                    cell_find = sheet_citas.find(str(row_sel['id']))
+                                    r_idx = cell_find.row
+                                    
+                                    # Actualizar columnas (Indices basados en estructura Hoja Citas)
+                                    # monto_pagado (T - 20), saldo_pendiente (U - 21), fecha_pago (V - 22), estado_pago (Q - 17)
+                                    # REVISAR ESTRUCTURA EN SECCIÓN 1B DEL PROMPT:
+                                    # A=1... monto_pagado=20, saldo_pendiente=21, fecha_pago=22
+                                    # estado_pago=17
+                                    
+                                    sheet_citas.update_cell(r_idx, 20, nuevo_pagado)
+                                    sheet_citas.update_cell(r_idx, 21, nuevo_pendiente)
+                                    sheet_citas.update_cell(r_idx, 22, nueva_fecha_pago)
+                                    sheet_citas.update_cell(r_idx, 17, nuevo_estado)
+                                    
+                                    st.balloons()
+                                    st.success(f"✅ Abono de ${abono_input} registrado correctamente.")
+                                    time.sleep(2); st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error al actualizar BD: {e}")
                     else:
-                        diff = precio_lista_sug - precio_final
-                        pct = (diff/precio_lista_sug*100) if precio_lista_sug > 0 else 0
-                        nota = f"Sesiones Est: {num_citas}"
+                        st.success("🎉 Este paciente NO tiene deudas pendientes.")
 
-                    fecha_pago = get_fecha_mx() if abono > 0 else ""
-                    estatus = "Pagado" if saldo_real <= 0 else "Pendiente"
+        # --- PLAN DE TRATAMIENTO (CON CAMPO PARA AGENDAR) ---
+        with tab_plan:
+            st.subheader("Nuevo Presupuesto")
+            seleccion_pac = st.selectbox("Seleccionar Paciente:", ["Buscar..."] + lista_pac, key="plan_sel")
+            
+            if seleccion_pac != "Buscar...":
+                id_p = seleccion_pac.split(" - ")[0]
+                nom_p = seleccion_pac.split(" - ")[1]
+                
+                c1, c2, c3 = st.columns(3)
+                # Cargar servicios si existen
+                try:
+                    servicios = pd.DataFrame(sheet_servicios.get_all_records())
+                    if not servicios.empty:
+                        cat = c1.selectbox("Categoría", servicios['categoria'].unique())
+                        trat = c2.selectbox("Tratamiento", servicios[servicios['categoria']==cat]['nombre_tratamiento'].unique())
+                        p_list = float(servicios[servicios['nombre_tratamiento']==trat]['precio_lista'].values[0])
+                    else:
+                        trat = c2.text_input("Tratamiento")
+                        p_list = c3.number_input("Precio Lista", 0.0)
+                except:
+                     trat = c2.text_input("Tratamiento")
+                     p_list = c3.number_input("Precio Lista", 0.0)
+
+                with st.form("form_plan"):
+                    col_p1, col_p2, col_p3 = st.columns(3)
+                    p_final = col_p1.number_input("Precio Final", value=p_list)
+                    p_abono = col_p2.number_input("Anticipo Hoy", min_value=0.0)
+                    doctor = col_p3.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
                     
-                    row_fin = [
-                        int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p,
-                        cat_sel, trat_sel, diente, doctor,
-                        precio_lista_sug, precio_final, pct, "No", 0, (precio_final*0.4),
-                        metodo, estatus, "No", nota,
-                        abono, saldo_real, fecha_pago
-                    ]
-                    sheet_citas.append_row(row_fin)
+                    st.markdown(f"**Saldo a Crédito:** ${p_final - p_abono:,.2f}")
                     
-                    msg_extra = ""
-                    if agendar_ahora:
-                        f_str = format_date_latino(f_cita_prox_obj)
-                        row_cita = [
-                            int(time.time())+1, f_str, h_cita_prox, id_p, nom_p,
-                            "Seguimiento", f"{trat_sel} (Sesión 1)", diente, doctor,
-                            0, 0, 0, "No", 0, 0, "N/A", "N/A", "No", "Cita generada desde Plan", 0, 0, ""
+                    agendar_cita = st.checkbox("📅 ¿Agendar la cita de este tratamiento de una vez?")
+                    if agendar_cita:
+                        fc_cita = st.date_input("Fecha Cita", datetime.now(TZ_MX))
+                        hc_cita = st.selectbox("Hora Cita", generar_slots_tiempo(), key="h_plan")
+
+                    if st.form_submit_button("💾 CREAR PLAN"):
+                        saldo = p_final - p_abono
+                        estatus = "Pagado" if saldo <= 0 else "Pendiente"
+                        row_fin = [
+                            int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, 
+                            "Plan", trat, 0, doctor, p_list, p_final, 0, "No", 0, 0, 
+                            "Efectivo", estatus, "No", "Plan Generado", p_abono, saldo, get_fecha_mx()
                         ]
-                        sheet_citas.append_row(row_cita)
-                        msg_extra = f" y Cita Agendada el {f_str}"
-                    
-                    st.success(f"✅ Plan Registrado{msg_extra}")
-                    time.sleep(2); st.rerun()
+                        sheet_citas.append_row(row_fin)
+                        
+                        if agendar_cita:
+                            row_cita = [
+                                int(time.time())+1, format_date_latino(fc_cita), hc_cita, id_p, nom_p,
+                                "Tratamiento", trat, 0, doctor, 0,0,0,"No",0,0,"N/A","N/A","No","",0,0,""
+                            ]
+                            sheet_citas.append_row(row_cita)
+                            st.success("Plan financiero y Cita guardados.")
+                        else:
+                            st.success("Plan financiero guardado (Solo deuda).")
+                        time.sleep(2); st.rerun()
 
     # ------------------------------------
     # MÓDULO 4: ASISTENCIA
@@ -587,7 +615,11 @@ def vista_consultorio():
         st.title("⏱️ Reloj Checador")
         col1, col2 = st.columns([1,3])
         with col1:
-            st.markdown("### 👨‍⚕️ Dr. Emmanuel")
+            st.markdown("""<div style="background-color:white; padding:20px; border-radius:10px; text-align:center; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+            <h3>Dr. Emmanuel</h3>
+            <p>Control de Horario</p>
+            </div>""", unsafe_allow_html=True)
+            
             c_a, c_b = st.columns(2)
             if c_a.button("🟢 ENTRADA"):
                 ok, m = registrar_movimiento("Dr. Emmanuel", "Entrada")
@@ -605,5 +637,5 @@ if __name__ == "__main__":
         vista_consultorio()
     elif st.session_state.perfil == "Administracion":
         st.title("Panel Director")
+        st.info("Vista Administrativa en Construcción")
         if st.button("Salir"): st.session_state.perfil=None; st.rerun()
-        
