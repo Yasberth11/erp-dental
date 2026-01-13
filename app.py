@@ -9,7 +9,7 @@ import random
 import string
 
 # ==========================================
-# 1. CONFIGURACIÓN Y ESTILO ROYAL
+# 1. CONFIGURACIÓN Y ESTILO
 # ==========================================
 st.set_page_config(page_title="Royal Dental Manager", page_icon="🦷", layout="wide", initial_sidebar_state="expanded")
 TZ_MX = pytz.timezone('America/Mexico_City')
@@ -22,13 +22,10 @@ def cargar_estilo_royal():
         h1, h2, h3, h4 { color: #002B5B !important; font-family: 'Helvetica Neue', sans-serif; }
         .stButton>button { background-color: #D4AF37; color: #002B5B; border: none; font-weight: bold; width: 100%; transition: all 0.3s; }
         .stButton>button:hover { background-color: #B5952F; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-        div[data-baseweb="input"] > div, div[data-baseweb="select"] > div { border-radius: 8px; background-color: #FFFFFF; border: 1px solid #D1D1D1; }
         
-        /* Semáforos Financieros */
-        .semaforo-verde { color: #155724; background-color: #D4EDDA; padding: 5px; border-radius: 5px; font-weight: bold; }
-        .semaforo-rojo { color: #721c24; background-color: #F8D7DA; padding: 5px; border-radius: 5px; font-weight: bold; }
+        /* Inputs numéricos alineados a la derecha y con formato */
+        input[type=number] { text-align: right; }
         
-        /* Ocultar elementos default */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         </style>
@@ -50,29 +47,27 @@ def init_db():
     conn = get_db_connection()
     c = conn.cursor()
     
-    # Tabla Pacientes
+    # Tabla Pacientes (Agregado campo 'sexo')
     c.execute('''CREATE TABLE IF NOT EXISTS pacientes (
         id_paciente TEXT, fecha_registro TEXT, nombre TEXT, apellido_paterno TEXT, 
         apellido_materno TEXT, telefono TEXT, email TEXT, rfc TEXT, regimen TEXT, 
-        uso_cfdi TEXT, cp TEXT, nota_fiscal TEXT, extra1 TEXT, estado TEXT, fecha_nacimiento TEXT
+        uso_cfdi TEXT, cp TEXT, nota_fiscal TEXT, sexo TEXT, estado TEXT, fecha_nacimiento TEXT
     )''')
     
-    # Tabla Citas (Finanzas y Agenda)
+    # Tabla Citas (Corregida estructura para evitar OperationalError)
     c.execute('''CREATE TABLE IF NOT EXISTS citas (
         timestamp INTEGER, fecha TEXT, hora TEXT, id_paciente TEXT, nombre_paciente TEXT, 
         tipo TEXT, tratamiento TEXT, diente TEXT, doctor_atendio TEXT, precio_lista REAL, 
         precio_final REAL, porcentaje REAL, tiene_factura TEXT, iva REAL, subtotal REAL, 
         metodo_pago TEXT, estado_pago TEXT, requiere_factura TEXT, notas TEXT, 
-        monto_pagado REAL, saldo_pendiente REAL, fecha_pago TEXT, costo_laboratorio REAL
+        monto_pagado REAL, saldo_pendiente REAL, fecha_pago TEXT, costo_laboratorio REAL, categoria TEXT
     )''')
     
-    # Tabla Asistencia
     c.execute('''CREATE TABLE IF NOT EXISTS asistencia (
         id_registro INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, doctor TEXT, 
         hora_entrada TEXT, hora_salida TEXT, horas_totales REAL, estado TEXT
     )''')
     
-    # Tabla Servicios (Catálogo)
     c.execute('''CREATE TABLE IF NOT EXISTS servicios (
         categoria TEXT, nombre_tratamiento TEXT, precio_lista REAL, costo_laboratorio_base REAL
     )''')
@@ -81,7 +76,6 @@ def init_db():
     conn.close()
 
 def seed_data():
-    """Carga los tratamientos dentales por defecto si la tabla está vacía"""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT count(*) FROM servicios")
@@ -120,7 +114,6 @@ def seed_data():
         conn.commit()
     conn.close()
 
-# Inicialización
 init_db()
 seed_data()
 
@@ -129,23 +122,22 @@ seed_data()
 # ==========================================
 def get_fecha_mx(): return datetime.now(TZ_MX).strftime("%d/%m/%Y")
 def get_hora_mx(): return datetime.now(TZ_MX).strftime("%H:%M:%S")
-
 def format_date_latino(date_obj): return date_obj.strftime("%d/%m/%Y")
-
-def limpiar_texto_mayus(texto):
-    if not texto: return ""
-    remplaces = {'Á':'A', 'É':'E', 'Í':'I', 'Ó':'O', 'Ú':'U', 'á':'A', 'é':'E', 'í':'I', 'ó':'O', 'ú':'U'}
-    texto = texto.upper()
-    for k, v in remplaces.items(): texto = texto.replace(k, v)
-    return texto
-
+def limpiar_texto_mayus(texto): return texto.upper().strip() if texto else ""
 def limpiar_email(texto): return texto.lower().strip() if texto else ""
+
+def format_tel_visual(tel):
+    """Convierte 5512345678 a 55-1234-5678 para visualización"""
+    if not tel or len(tel) != 10: return tel
+    return f"{tel[:2]}-{tel[2:6]}-{tel[6:]}"
 
 def calcular_edad_completa(nacimiento_input):
     hoy = datetime.now().date()
-    # Intenta parsear la fecha, si falla devuelve N/A
     try:
-        nacimiento = datetime.strptime(nacimiento_input, "%d/%m/%Y").date()
+        if isinstance(nacimiento_input, str):
+            nacimiento = datetime.strptime(nacimiento_input, "%d/%m/%Y").date()
+        else:
+            nacimiento = nacimiento_input
     except:
         return "N/A", ""
         
@@ -162,7 +154,9 @@ def generar_id_unico(nombre, paterno, nacimiento):
         return f"{part1}{part2}-{part3}-{random_chars}"
     except: return f"P-{int(time.time())}"
 
-def formatear_telefono(numero): return re.sub(r'\D', '', str(numero))
+def formatear_telefono_db(numero): 
+    # Guarda solo números en la DB para facilitar el uso de WhatsApp API después
+    return re.sub(r'\D', '', str(numero))
 
 def generar_slots_tiempo():
     slots = []
@@ -174,7 +168,7 @@ def generar_slots_tiempo():
     return slots
 
 def get_regimenes_fiscales():
-    return ["605 - Sueldos y Salarios", "612 - Personas Físicas con Actividades Empresariales", "626 - RESICO", "616 - Sin obligaciones fiscales", "601 - General de Ley Personas Morales"]
+    return ["605 - Sueldos y Salarios", "612 - PFAEP (Actividad Empresarial)", "626 - RESICO", "616 - Sin obligaciones fiscales", "601 - General de Ley Personas Morales"]
 
 def get_usos_cfdi():
     return ["D01 - Honorarios médicos, dentales", "S01 - Sin efectos fiscales", "G03 - Gastos en general", "CP01 - Pagos"]
@@ -187,32 +181,24 @@ def registrar_movimiento(doctor, tipo):
     c = conn.cursor()
     hoy = get_fecha_mx()
     hora_actual = get_hora_mx()
-    
     try:
         if tipo == "Entrada":
             c.execute("SELECT * FROM asistencia WHERE doctor=? AND fecha=? AND hora_salida = ''", (doctor, hoy))
             if c.fetchone(): return False, "Ya tienes una sesión abierta."
-            
             c.execute("INSERT INTO asistencia (fecha, doctor, hora_entrada, hora_salida, horas_totales, estado) VALUES (?,?,?,?,?,?)",
                       (hoy, doctor, hora_actual, "", 0, "Pendiente"))
-            conn.commit()
-            return True, f"Entrada: {hora_actual}"
-            
+            conn.commit(); return True, f"Entrada: {hora_actual}"
         elif tipo == "Salida":
             c.execute("SELECT id_registro, hora_entrada FROM asistencia WHERE doctor=? AND fecha=? AND hora_salida = ''", (doctor, hoy))
             row = c.fetchone()
             if not row: return False, "No tienes entrada abierta hoy."
-            
             id_reg, h_ent = row
             fmt = "%H:%M:%S"
             tdelta = datetime.strptime(hora_actual, fmt) - datetime.strptime(h_ent, fmt)
             horas = round(tdelta.total_seconds() / 3600, 2)
-            
             c.execute("UPDATE asistencia SET hora_salida=?, horas_totales=?, estado=? WHERE id_registro=?",
                       (hora_actual, horas, "Finalizado", id_reg))
-            conn.commit()
-            return True, f"Salida: {hora_actual} ({horas}h)"
-            
+            conn.commit(); return True, f"Salida: {hora_actual} ({horas}h)"
     except Exception as e: return False, str(e)
     finally: conn.close()
 
@@ -240,31 +226,22 @@ def pantalla_login():
 def vista_consultorio():
     st.sidebar.markdown("### 🏥 Royal Dental")
     st.sidebar.caption(f"Fecha: {get_fecha_mx()}")
-    
-    menu = st.sidebar.radio("Menú", 
-        ["1. Agenda & Citas", "2. Gestión Pacientes", "3. Planes de Tratamiento", "4. Control Asistencia"])
-    
-    if st.sidebar.button("Cerrar Sesión"):
-        st.session_state.perfil = None; st.rerun()
+    menu = st.sidebar.radio("Menú", ["1. Agenda & Citas", "2. Gestión Pacientes", "3. Planes de Tratamiento", "4. Control Asistencia"])
+    if st.sidebar.button("Cerrar Sesión"): st.session_state.perfil = None; st.rerun()
     
     conn = get_db_connection()
 
-    # ------------------------------------
-    # MÓDULO 1: AGENDA 
-    # ------------------------------------
+    # --- MÓDULO 1: AGENDA ---
     if menu == "1. Agenda & Citas":
-        st.title("📅 Agenda del Consultorio")
+        st.title("📅 Agenda")
         
         with st.expander("🔍 BUSCADOR DE CITAS", expanded=False):
             q_cita = st.text_input("Buscar cita por nombre:")
             if q_cita:
-                df = pd.read_sql(f"SELECT fecha, hora, nombre_paciente, tratamiento, doctor_atendio FROM citas WHERE nombre_paciente LIKE '%{q_cita}%'", conn)
+                df = pd.read_sql(f"SELECT fecha, hora, nombre_paciente, tratamiento, doctor_atendio, estado_pago FROM citas WHERE nombre_paciente LIKE '%{q_cita}%'", conn)
                 st.dataframe(df)
 
-        st.markdown("---")
-        
         col_cal1, col_cal2 = st.columns([1, 2.5])
-        
         with col_cal1:
             st.markdown("### 📆 Gestión")
             fecha_ver_obj = st.date_input("Seleccionar Fecha", datetime.now(TZ_MX), format="DD/MM/YYYY")
@@ -272,14 +249,11 @@ def vista_consultorio():
             
             with st.expander("➕ Agendar Cita Nueva", expanded=False):
                 tab_reg, tab_new = st.tabs(["Registrado", "Prospecto"])
-                
+                # AGENDAR REGISTRADO
                 with tab_reg:
-                    with st.form("cita_registrada"):
+                    with st.form("cita_registrada", clear_on_submit=True): # Limpiar al enviar
                         pacientes_raw = pd.read_sql("SELECT id_paciente, nombre, apellido_paterno FROM pacientes", conn)
-                        lista_pac = []
-                        if not pacientes_raw.empty:
-                            lista_pac = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
-                        
+                        lista_pac = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist() if not pacientes_raw.empty else []
                         p_sel = st.selectbox("Paciente", ["Seleccionar..."] + lista_pac)
                         h_sel = st.selectbox("Hora", generar_slots_tiempo())
                         m_sel = st.text_input("Motivo", "Revisión / Continuación")
@@ -290,16 +264,17 @@ def vista_consultorio():
                                 id_p = p_sel.split(" - ")[0]
                                 nom_p = p_sel.split(" - ")[1]
                                 c = conn.cursor()
-                                c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, monto_pagado, saldo_pendiente, estado_pago) 
-                                             VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
-                                          (int(time.time()), fecha_ver_str, h_sel, id_p, nom_p, "General", m_sel, d_sel, 0, 0, "Pendiente"))
+                                # NOTA: Ajuste de columnas para que coincida con DB
+                                c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, monto_pagado, saldo_pendiente, estado_pago, precio_lista, precio_final, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, notas, fecha_pago, costo_laboratorio, categoria) 
+                                             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                                          (int(time.time()), fecha_ver_str, h_sel, id_p, nom_p, "General", m_sel, d_sel, 0, 0, "Pendiente", 0, 0, 0, "No", 0, 0, "", "No", "", "", 0, "General"))
                                 conn.commit()
-                                st.success(f"Agendado el {fecha_ver_str}")
-                                time.sleep(1); st.rerun()
+                                st.success(f"Agendado"); time.sleep(1); st.rerun()
                             else: st.error("Seleccione paciente")
 
+                # AGENDAR PROSPECTO
                 with tab_new:
-                    with st.form("cita_prospecto"):
+                    with st.form("cita_prospecto", clear_on_submit=True): # Se limpia al enviar
                         nombre_pros = st.text_input("Nombre")
                         tel_pros = st.text_input("Tel (10)", max_chars=10)
                         hora_pros = st.selectbox("Hora", generar_slots_tiempo())
@@ -311,12 +286,11 @@ def vista_consultorio():
                                 id_temp = f"PROSPECTO-{int(time.time())}"
                                 nom_final = limpiar_texto_mayus(nombre_pros)
                                 c = conn.cursor()
-                                c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, estado_pago, notas) 
-                                             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                                          (int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, "Primera Vez", motivo_pros, doc_pros, 0, 0, 0, "Pendiente", f"Tel: {tel_pros}"))
+                                c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, estado_pago, notas, precio_lista, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, fecha_pago, costo_laboratorio, categoria) 
+                                             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                                          (int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, "Primera Vez", motivo_pros, doc_pros, 0, 0, 0, "Pendiente", f"Tel: {tel_pros}", 0, 0, "No", 0, 0, "", "No", "", 0, "Primera Vez"))
                                 conn.commit()
-                                st.success("Agendado")
-                                time.sleep(1); st.rerun()
+                                st.success("Agendado"); time.sleep(1); st.rerun()
                             else: st.error("Datos incorrectos")
             
             st.markdown("### 🔄 Modificar Agenda")
@@ -330,16 +304,25 @@ def vista_consultorio():
                     
                     if cita_sel != "Seleccionar...":
                         hora_target = cita_sel.split(" - ")[0]
-                        nombre_target = cita_sel.split(" - ")[1].split(" (")[0]
+                        nom_target = cita_sel.split(" - ")[1].split(" (")[0]
                         
-                        if st.button("Eliminar Cita Seleccionada"):
+                        c1, c2 = st.columns(2)
+                        if c1.button("❌ Cancelar Cita"):
                             c = conn.cursor()
-                            c.execute("DELETE FROM citas WHERE fecha=? AND hora=? AND nombre_paciente=?", (fecha_ver_str, hora_target, nombre_target))
+                            # NO BORRAMOS, SOLO MARCAMOS CANCELADO Y QUITAMOS HORA PARA LIBERAR
+                            c.execute("UPDATE citas SET estado_pago='CANCELADO', hora=hora||' (CANC)' WHERE fecha=? AND hora=? AND nombre_paciente=?", 
+                                      (fecha_ver_str, hora_target, nom_target))
                             conn.commit()
-                            st.success("Cita eliminada.")
-                            time.sleep(1); st.rerun()
-                else:
-                    st.info("No hay citas este día.")
+                            st.warning("Cita cancelada."); time.sleep(1); st.rerun()
+                            
+                        with c2:
+                            new_h = st.selectbox("Reagendar a:", generar_slots_tiempo(), key="reag_time")
+                            if st.button("🗓️ Mover Cita"):
+                                c = conn.cursor()
+                                c.execute("UPDATE citas SET hora=? WHERE fecha=? AND hora=? AND nombre_paciente=?", 
+                                          (new_h, fecha_ver_str, hora_target, nom_target))
+                                conn.commit()
+                                st.success(f"Movida a las {new_h}"); time.sleep(1); st.rerun()
 
         with col_cal2:
             st.markdown(f"#### 📋 Programación: {fecha_ver_str}")
@@ -347,7 +330,8 @@ def vista_consultorio():
                 df_dia = df_c[df_c['fecha'] == fecha_ver_str]
                 slots = generar_slots_tiempo()
                 for slot in slots:
-                    ocupado = df_dia[df_dia['hora'] == slot]
+                    # Filtramos citas que no estén canceladas
+                    ocupado = df_dia[(df_dia['hora'] == slot) & (df_dia['estado_pago'] != 'CANCELADO')]
                     if ocupado.empty:
                         st.markdown(f"""<div style="padding:8px; border-bottom:1px solid #eee; display:flex; align-items:center;"><span style="font-weight:bold; color:#aaa; width:60px;">{slot}</span><span style="color:#ddd; font-size:0.9em;">Disponible</span></div>""", unsafe_allow_html=True)
                     else:
@@ -359,13 +343,10 @@ def vista_consultorio():
                                 <span style="color:#666; font-size:0.9em;">{r['tratamiento']} - {r['doctor_atendio']}</span>
                             </div>""", unsafe_allow_html=True)
 
-    # ------------------------------------
-    # MÓDULO 2: PACIENTES
-    # ------------------------------------
+    # --- MÓDULO 2: PACIENTES ---
     elif menu == "2. Gestión Pacientes":
         st.title("📂 Expediente Clínico")
-        
-        tab_b, tab_n, tab_e = st.tabs(["🔍 BUSCAR", "➕ NUEVO (ALTA)", "✏️ EDITAR"])
+        tab_b, tab_n, tab_e = st.tabs(["🔍 BUSCAR", "➕ NUEVO (ALTA)", "✏️ EDITAR COMPLETO"])
         
         with tab_b:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
@@ -373,68 +354,67 @@ def vista_consultorio():
             else:
                 lista_busqueda = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 seleccion = st.selectbox("Seleccionar:", ["Buscar..."] + lista_busqueda)
-                
                 if seleccion != "Buscar...":
                     id_sel_str = seleccion.split(" - ")[0]
                     p_data = pacientes_raw[pacientes_raw['id_paciente'] == id_sel_str].iloc[0]
-                    
-                    f_nac_raw = p_data['fecha_nacimiento'] if p_data['fecha_nacimiento'] else ""
-                    edad, tipo_pac = calcular_edad_completa(f_nac_raw)
-                    rfc_show = p_data['rfc'] if p_data['rfc'] else 'N/A'
-                    
+                    edad, tipo_pac = calcular_edad_completa(p_data.get('fecha_nacimiento', ''))
+                    tel_fmt = format_tel_visual(p_data['telefono'])
                     st.markdown(f"""
                     <div class="royal-card">
                         <h3>👤 {p_data['nombre']} {p_data['apellido_paterno']} {p_data['apellido_materno']}</h3>
-                        <span style="background-color:#002B5B; color:white; padding:4px 8px; border-radius:4px;">{edad} Años - {tipo_pac}</span>
-                        <br><br><b>Tel:</b> {p_data['telefono']} | <b>Email:</b> {p_data['email']}
-                        <br><b>RFC:</b> {rfc_show}
+                        <span style="background-color:#002B5B; color:white; padding:4px 8px; border-radius:4px;">{edad} Años - {tipo_pac} - {p_data.get('sexo', '')}</span>
+                        <br><br><b>Tel:</b> {tel_fmt} | <b>Email:</b> {p_data['email']}
+                        <br><b>RFC:</b> {p_data.get('rfc', 'N/A')} | <b>Régimen:</b> {p_data.get('regimen', 'N/A')}
                     </div>""", unsafe_allow_html=True)
         
         with tab_n:
             st.markdown("#### Formulario de Alta")
-            requiere_factura = st.checkbox("¿Requiere Factura?", key="chk_alta")
-            
             with st.form("alta_paciente"):
-                c_nom, c_pat, c_mat = st.columns(3)
-                nombre = c_nom.text_input("Nombre(s)")
-                paterno = c_pat.text_input("Apellido Paterno")
-                materno = c_mat.text_input("Apellido Materno")
+                c1, c2, c3 = st.columns(3)
+                nombre = c1.text_input("Nombre(s)")
+                paterno = c2.text_input("Apellido Paterno")
+                materno = c3.text_input("Apellido Materno")
                 
-                c_nac, c_tel, c_mail = st.columns(3)
-                nacimiento = c_nac.date_input("Fecha Nacimiento", min_value=datetime(1920,1,1))
-                tel = c_tel.text_input("Teléfono (10 dígitos)", max_chars=10)
-                email = c_mail.text_input("Email")
+                c4, c5, c6 = st.columns(3)
+                nacimiento = c4.date_input("Fecha Nacimiento", min_value=datetime(1920,1,1))
+                tel = c5.text_input("Teléfono (10 dígitos)", max_chars=10)
+                email = c6.text_input("Email")
                 
-                if requiere_factura:
-                    st.markdown("**Datos Fiscales (SAT)**")
-                    c_f1, c_f2 = st.columns(2)
-                    rfc = c_f1.text_input("RFC", max_chars=13)
-                    cp = c_f2.text_input("C.P.", max_chars=5)
-                    regimen = st.selectbox("Régimen Fiscal", get_regimenes_fiscales())
-                    uso = st.selectbox("Uso CFDI", get_usos_cfdi())
-                else:
-                    rfc, cp, regimen, uso = "", "", "", ""
+                c7, c8 = st.columns(2)
+                sexo = c7.selectbox("Sexo/Género", ["Mujer", "Hombre", "Prefiero no decir"])
+                rfc = c8.text_input("RFC (Opcional)")
+                
+                st.markdown("**Datos Fiscales Adicionales**")
+                c9, c10, c11 = st.columns(3)
+                regimen = c9.selectbox("Régimen Fiscal", get_regimenes_fiscales())
+                uso_cfdi = c10.selectbox("Uso CFDI", get_usos_cfdi())
+                cp = c11.text_input("Código Postal (5 dígitos)", max_chars=5)
                 
                 if st.form_submit_button("💾 GUARDAR PACIENTE"):
-                    if not tel.isdigit() or len(tel) != 10: st.error("❌ Teléfono incorrecto.")
-                    elif not nombre or not paterno: st.error("❌ Nombre/Apellido obligatorios.")
+                    # VALIDACIONES
+                    errores = []
+                    if not tel.isdigit() or len(tel) != 10: errores.append("❌ Teléfono debe ser 10 dígitos numéricos.")
+                    if cp and (not cp.isdigit() or len(cp) != 5): errores.append("❌ C.P. debe ser 5 dígitos numéricos.")
+                    if not nombre or not paterno: errores.append("❌ Nombre y Apellido Paterno obligatorios.")
+                    
+                    if errores:
+                        for e in errores: st.error(e)
                     else:
                         nom_f = limpiar_texto_mayus(nombre)
                         pat_f = limpiar_texto_mayus(paterno)
                         mat_f = limpiar_texto_mayus(materno)
-                        mail_f = limpiar_email(email)
                         nuevo_id = generar_id_unico(nom_f, pat_f, nacimiento)
                         f_nac_str = format_date_latino(nacimiento)
                         
                         c = conn.cursor()
+                        # Ajustado para incluir sexo, cp, uso_cfdi
                         c.execute("INSERT INTO pacientes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                                  (nuevo_id, get_fecha_mx(), nom_f, pat_f, mat_f, tel, mail_f, rfc.upper(), regimen, uso, cp, "", "", "Activo", f_nac_str))
+                                  (nuevo_id, get_fecha_mx(), nom_f, pat_f, mat_f, tel, limpiar_email(email), rfc.upper(), regimen, uso_cfdi, cp, "", sexo, "Activo", f_nac_str))
                         conn.commit()
-                        st.success(f"✅ Paciente {nom_f} guardado.")
-                        time.sleep(1.5); st.rerun()
+                        st.success(f"✅ Paciente {nom_f} guardado."); time.sleep(1.5); st.rerun()
 
         with tab_e:
-            st.markdown("#### ✏️ Modificar Paciente")
+            st.markdown("#### ✏️ Edición Completa")
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
                 lista_edit = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
@@ -442,38 +422,47 @@ def vista_consultorio():
                 
                 if sel_edit != "Seleccionar...":
                     id_target = sel_edit.split(" - ")[0]
-                    p_edit = pacientes_raw[pacientes_raw['id_paciente'] == id_target].iloc[0]
+                    p = pacientes_raw[pacientes_raw['id_paciente'] == id_target].iloc[0]
                     
-                    with st.form("form_editar"):
-                        e_nom = st.text_input("Nombre", p_edit['nombre'])
-                        e_pat = st.text_input("Apellido Paterno", p_edit['apellido_paterno'])
-                        e_tel = st.text_input("Teléfono", p_edit['telefono'])
-                        e_email = st.text_input("Email", p_edit['email'])
+                    with st.form("form_editar_full"):
+                        ec1, ec2, ec3 = st.columns(3)
+                        e_nom = ec1.text_input("Nombre", p['nombre'])
+                        e_pat = ec2.text_input("A. Paterno", p['apellido_paterno'])
+                        e_mat = ec3.text_input("A. Materno", p['apellido_materno'])
                         
-                        if st.form_submit_button("💾 ACTUALIZAR"):
-                            c = conn.cursor()
-                            c.execute("UPDATE pacientes SET nombre=?, apellido_paterno=?, telefono=?, email=? WHERE id_paciente=?", 
-                                      (limpiar_texto_mayus(e_nom), limpiar_texto_mayus(e_pat), formatear_telefono(e_tel), e_email, id_target))
-                            conn.commit()
-                            st.success("Datos actualizados.")
-                            time.sleep(1.5); st.rerun()
+                        ec4, ec5 = st.columns(2)
+                        e_tel = ec4.text_input("Teléfono", p['telefono'])
+                        e_email = ec5.text_input("Email", p['email'])
+                        
+                        st.markdown("---")
+                        ec6, ec7, ec8 = st.columns(3)
+                        e_rfc = ec6.text_input("RFC", p['rfc'])
+                        e_cp = ec7.text_input("C.P.", p['cp'])
+                        
+                        # Indices para selectbox (manejo de errores si el dato en DB no coincide)
+                        idx_reg = 0
+                        reg_list = get_regimenes_fiscales()
+                        if p['regimen'] in reg_list: idx_reg = reg_list.index(p['regimen'])
+                        e_reg = ec8.selectbox("Régimen", reg_list, index=idx_reg)
 
-    # ------------------------------------
-    # MÓDULO 3: PLANES (CON HISTORIAL)
-    # ------------------------------------
+                        if st.form_submit_button("💾 ACTUALIZAR TODO"):
+                            c = conn.cursor()
+                            c.execute("UPDATE pacientes SET nombre=?, apellido_paterno=?, apellido_materno=?, telefono=?, email=?, rfc=?, cp=?, regimen=? WHERE id_paciente=?", 
+                                      (limpiar_texto_mayus(e_nom), limpiar_texto_mayus(e_pat), limpiar_texto_mayus(e_mat), formatear_telefono_db(e_tel), e_email, e_rfc.upper(), e_cp, e_reg, id_target))
+                            conn.commit()
+                            st.success("Datos actualizados."); time.sleep(1.5); st.rerun()
+
+    # --- MÓDULO 3: PLANES DE TRATAMIENTO ---
     elif menu == "3. Planes de Tratamiento":
         st.title("💰 Planes de Tratamiento")
-        
         try:
             pacientes = pd.read_sql("SELECT * FROM pacientes", conn)
             servicios = pd.read_sql("SELECT * FROM servicios", conn)
             df_finanzas = pd.read_sql("SELECT * FROM citas", conn)
-        except Exception as e: 
-            st.error(f"Error cargando base de datos: {e}")
-            st.stop()
+        except Exception as e: st.error(f"Error DB: {e}"); st.stop()
             
         if pacientes.empty:
-            st.warning("No hay pacientes registrados.")
+            st.warning("Registra pacientes primero.")
         else:
             lista_pac = pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
             seleccion_pac = st.selectbox("Seleccionar Paciente:", ["Buscar..."] + lista_pac)
@@ -482,31 +471,26 @@ def vista_consultorio():
                 id_p = seleccion_pac.split(" - ")[0]
                 nom_p = seleccion_pac.split(" - ")[1]
                 
+                # ESTADO DE CUENTA
                 st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
                 if not df_finanzas.empty:
                     historial = df_finanzas[df_finanzas['id_paciente'] == id_p]
                     if not historial.empty:
-                        # Corregir error de tipo de dato
-                        if 'saldo_pendiente' in historial.columns:
-                            deuda_total = pd.to_numeric(historial['saldo_pendiente'], errors='coerce').fillna(0).sum()
-                        else:
-                            deuda_total = 0
-                        
+                        deuda_total = pd.to_numeric(historial['saldo_pendiente'], errors='coerce').fillna(0).sum()
                         col_sem1, col_sem2 = st.columns(2)
                         col_sem1.metric("Deuda Total", f"${deuda_total:,.2f}")
                         if deuda_total > 0: col_sem2.error("🚨 SALDO PENDIENTE")
                         else: col_sem2.success("✅ AL CORRIENTE")
                         
-                        with st.expander("📜 Historial Detallado", expanded=False):
-                            cols = [c for c in ['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente', 'estado_pago'] if c in historial.columns]
-                            st.dataframe(historial[cols])
+                        with st.expander("Ver Desglose"):
+                            st.dataframe(historial[['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente']])
                 
                 st.markdown("---")
                 st.subheader("Nuevo Plan Integral")
                 
                 c1, c2, c3 = st.columns(3)
                 
-                # Carga dinámica de servicios desde SQL
+                # LOGICA DE PRECIOS
                 if not servicios.empty:
                     cats = servicios['categoria'].unique()
                     cat_sel = c1.selectbox("1. Categoría", cats)
@@ -516,63 +500,73 @@ def vista_consultorio():
                     precio_lista_sug = float(item['precio_lista'])
                     costo_lab_sug = float(item['costo_laboratorio_base'])
                 else:
-                    cat_sel = "General"
-                    trat_sel = c2.text_input("Tratamiento Manual")
-                    precio_lista_sug = c3.number_input("Precio Lista", 0.0)
+                    cat_sel = "Manual"
+                    trat_sel = c2.text_input("Tratamiento")
+                    precio_lista_sug = 0.0
                     costo_lab_sug = 0.0
                     
-                c3.metric("Precio de Lista Sugerido", f"${precio_lista_sug:,.2f}")
+                c3.metric("Precio Lista", f"${precio_lista_sug:,.2f}")
                 
-                st.markdown("#### 💳 Definición de Cobro")
-                col_f1, col_f2, col_f3 = st.columns(3)
-                precio_final = col_f1.number_input("Precio Final a Cobrar", value=precio_lista_sug, min_value=0.0, format="%.2f")
-                abono = col_f2.number_input("Abono Inicial", min_value=0.0, format="%.2f")
-                saldo_real = precio_final - abono
-                col_f3.metric("Saldo Pendiente (Deuda)", f"${saldo_real:,.2f}", delta_color="inverse")
-
-                agendar_ahora = st.checkbox("📅 ¿Agendar Primera Sesión/Cita Ahora?")
-
+                # FORMULARIO
                 with st.form("form_plan_final"):
+                    col_f1, col_f2, col_f3 = st.columns(3)
+                    # Formato en inputs: format="$%.2f"
+                    precio_final = col_f1.number_input("Precio Final a Cobrar", value=precio_lista_sug, min_value=0.0, format="%.2f")
+                    abono = col_f2.number_input("Abono Inicial", min_value=0.0, format="%.2f")
+                    
+                    # Logica visual de descuento/sobrecosto
+                    if precio_final < precio_lista_sug:
+                        st.info(f"🎁 Descuento aplicado: ${precio_lista_sug - precio_final:,.2f}")
+                    elif precio_final > precio_lista_sug:
+                        pct_extra = ((precio_final - precio_lista_sug) / precio_lista_sug) * 100 if precio_lista_sug > 0 else 0
+                        st.warning(f"📈 Sobrecosto: +{pct_extra:.1f}% (${precio_final - precio_lista_sug:,.2f})")
+                    
+                    saldo_real = precio_final - abono
+                    col_f3.metric("Saldo Pendiente", f"${saldo_real:,.2f}")
+                    
+                    st.markdown("---")
                     col_d1, col_d2, col_d3 = st.columns(3)
                     doctor = col_d1.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
-                    diente = col_d2.number_input("Diente (ISO)", min_value=0, max_value=85)
+                    diente = col_d2.number_input("Diente (ISO)", min_value=0, max_value=85, step=1)
                     metodo = col_d3.selectbox("Método de Pago", ["Efectivo", "Tarjeta", "Transferencia"])
-                    num_citas = st.number_input("Sesiones Estimadas", min_value=1, value=1)
                     
-                    if st.form_submit_button("💾 REGISTRAR"):
-                        pct = 0; nota = ""
-                        if precio_final > precio_lista_sug: nota = f"Sobrecosto: ${precio_final - precio_lista_sug}"
-                        
+                    # CHECKBOX "Agendar" (Solo visual aquí, lógica después del submit)
+                    agendar = st.checkbox("¿Agendar Cita de Primera Sesión?")
+                    # Campos de fecha siempre visibles pero opcionales (Mejor UX para Streamlit)
+                    st.caption("Si seleccionaste agendar, define la fecha:")
+                    c_date1, c_date2 = st.columns(2)
+                    f_cita_plan = c_date1.date_input("Fecha Cita", datetime.now(TZ_MX))
+                    h_cita_plan = c_date2.selectbox("Hora Cita", generar_slots_tiempo())
+
+                    if st.form_submit_button("💾 REGISTRAR PLAN Y COBRO"):
+                        nota = f"Desc: ${precio_lista_sug-precio_final}" if precio_final < precio_lista_sug else ""
                         estatus = "Pagado" if saldo_real <= 0 else "Pendiente"
                         
                         c = conn.cursor()
-                        # Insertar Cita/Cobro con campo costo_laboratorio
+                        # CORRECCION DEL ERROR SQL: Aseguramos que los campos coincidan con la tabla
                         c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, 
                                      categoria, tratamiento, diente, doctor_atendio, precio_lista, precio_final, 
                                      porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) 
                                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                   (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, 
-                                   cat_sel, trat_sel, diente, doctor, precio_lista_sug, precio_final, pct, 
+                                   cat_sel, trat_sel, str(diente), doctor, precio_lista_sug, precio_final, 0, 
                                    metodo, estatus, nota, abono, saldo_real, get_fecha_mx(), costo_lab_sug))
                         
-                        if agendar_ahora:
-                            c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, diente, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, estado_pago, notas) 
-                                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                                      (int(time.time())+1, get_fecha_mx(), "09:00", id_p, nom_p, "Seguimiento", f"{trat_sel} (Sesión 1)", diente, doctor, 0, 0, 0, "N/A", "Cita generada desde Plan"))
+                        if agendar:
+                            f_str = format_date_latino(f_cita_plan)
+                            c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, diente, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, estado_pago, notas, precio_lista, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, fecha_pago, costo_laboratorio, categoria) 
+                                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                                      (int(time.time())+1, f_str, h_cita_plan, id_p, nom_p, "Seguimiento", f"{trat_sel} (Sesión 1)", str(diente), doctor, 0, 0, 0, "Pendiente", "Cita desde Plan", 0, 0, "No", 0, 0, "", "No", "", 0, cat_sel))
                         
                         conn.commit()
-                        st.success(f"✅ Plan Registrado")
+                        st.success(f"✅ Plan Registrado exitosamente.")
                         time.sleep(2); st.rerun()
 
-    # ------------------------------------
-    # MÓDULO 4: ASISTENCIA
-    # ------------------------------------
+    # --- MÓDULO 4: ASISTENCIA ---
     elif menu == "4. Control Asistencia":
         st.title("⏱️ Reloj Checador")
-        # CORRECCIÓN DE ERROR SINTÁCTICO DE LÍNEA 370
-        col_asist1, col_asist2 = st.columns([1,3])
-        
-        with col_asist1:
+        col1, col2 = st.columns([1,3])
+        with col1:
             st.markdown("### 👨‍⚕️ Dr. Emmanuel")
             c_a, c_b = st.columns(2)
             if c_a.button("🟢 ENTRADA"):
