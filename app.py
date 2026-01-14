@@ -259,9 +259,7 @@ def crear_pdf_consentimiento(paciente, doctor, tratamiento, firma_img_data):
             img.save(temp_filename); pdf.image(temp_filename, x=10, w=50)
         except: pass
     
-    # CORRECCIÓN DEFINITIVA DE SALIDA (Byte String Safe)
     val = pdf.output(dest='S')
-    # En versiones nuevas fpdf devuelve str o bytearray dependiendo
     if isinstance(val, str):
         return val.encode('latin-1')
     return val
@@ -305,7 +303,6 @@ def crear_pdf_historia(paciente_data, historial_citas):
             
             pdf.cell(30, 6, f, 1); pdf.cell(60, 6, t[:35], 1); pdf.cell(90, 6, n[:50], 1); pdf.ln()
             
-    # CORRECCIÓN DEFINITIVA DE SALIDA
     val = pdf.output(dest='S')
     if isinstance(val, str):
         return val.encode('latin-1')
@@ -409,7 +406,7 @@ def vista_consultorio():
                         c_move, c_cancel, c_delete = st.columns(3)
                         with c_move:
                             new_date_res = st.date_input("Nueva Fecha", datetime.now(TZ_MX)); new_h_res = st.selectbox("Nueva Hora", generar_slots_tiempo(), key="reag_time")
-                            if st.button("🗓️ Mover y Activar"):
+                            if st.button("🗓️ Mover"):
                                 c = conn.cursor()
                                 c.execute("UPDATE citas SET fecha=?, hora=?, estado_pago='Pendiente' WHERE fecha=? AND hora=? AND nombre_paciente=?", (format_date_latino(new_date_res), new_h_res, fecha_ver_str, hora_target, nom_target))
                                 conn.commit(); st.success(f"Reagendada para: {new_date_str}"); time.sleep(1); st.rerun()
@@ -486,7 +483,8 @@ def vista_consultorio():
                 c7, c8 = st.columns(2)
                 sexo = c7.selectbox("Sexo", ["Mujer", "Hombre"]); rfc = c8.text_input("RFC (Opcional)")
                 st.markdown("**Historia Médica**")
-                ahf = st.text_area("AHF (Heredo-Familiares)"); app = st.text_area("APP (Personales Patológicos)"); apnp = st.text_area("APNP (No Patológicos)")
+                # CORRECCIÓN PLACEHOLDERS VISIBLES
+                ahf = st.text_area("AHF (Heredo-Familiares)", placeholder="Diabetes, Hipertensión en padres/abuelos..."); app = st.text_area("APP (Personales Patológicos)", placeholder="Alergias a medicamentos, cirugías previas, enfermedades crónicas..."); apnp = st.text_area("APNP (No Patológicos)", placeholder="Tabaquismo, Alcoholismo, Higiene bucal...")
                 st.markdown("**Fiscal**")
                 c9, c10, c11 = st.columns(3)
                 regimen = c9.selectbox("Régimen Fiscal", get_regimenes_fiscales()); uso_cfdi = c10.selectbox("Uso CFDI", get_usos_cfdi()); cp = c11.text_input("C.P.", max_chars=5)
@@ -499,7 +497,8 @@ def vista_consultorio():
                     
                     nuevo_id = generar_id_unico(sanitizar(nombre), sanitizar(paterno), nacimiento)
                     c = conn.cursor()
-                    c.execute("INSERT INTO pacientes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    # CORRECCIÓN ERROR SQL OPERATIONAL ERROR (Explicit Column Names)
+                    c.execute("INSERT INTO pacientes (id_paciente, fecha_registro, nombre, apellido_paterno, apellido_materno, telefono, email, rfc, regimen, uso_cfdi, cp, nota_fiscal, sexo, estado, fecha_nacimiento, antecedentes_medicos, ahf, app, apnp) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                               (nuevo_id, get_fecha_mx(), sanitizar(nombre), sanitizar(paterno), sanitizar(materno), tel, limpiar_email(email), sanitizar(rfc), regimen, uso_cfdi, cp, "", sexo, "Activo", format_date_latino(nacimiento), "", sanitizar(ahf), sanitizar(app), sanitizar(apnp)))
                     conn.commit(); st.success(f"✅ Paciente {nombre} guardado."); time.sleep(1.5); st.rerun()
 
@@ -584,10 +583,7 @@ def vista_consultorio():
                         if metodo == "Pendiente de Pago" and abono > 0: st.warning("Advertencia: Abono en 'Pendiente de Pago'.")
                         
                         # VALIDACIÓN UNIDAD ÚNICA EN PLANES
-                        ocupado = False
-                        if agendar:
-                            ocupado = verificar_disponibilidad(format_date_latino(f_cita_plan), h_cita_plan)
-                        
+                        ocupado = verificar_disponibilidad(format_date_latino(f_cita_plan), h_cita_plan) if agendar else False
                         if ocupado: 
                             st.error(f"⚠️ Horario {h_cita_plan} OCUPADO. No se pudo agendar la cita. El cobro NO se guardó.")
                         else:
@@ -624,7 +620,7 @@ def vista_consultorio():
             if st.button("🖨️ Generar Documento PDF"):
                 if canvas_result.image_data is not None:
                     import numpy as np; from PIL import Image; import io
-                    img = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA'); buf = io.BytesIO(); img.save(buf, format="PNG")
+                    img = Image.fromarray(canvas.image_data.astype('uint8'), 'RGBA'); buf = io.BytesIO(); img.save(buf, format="PNG")
                     img_str = base64.b64encode(buf.getvalue()).decode()
                     pdf_bytes = crear_pdf_consentimiento(nom_p, doc_sel, tipo_doc, img_str)
                     st.download_button(label="📥 Descargar PDF Firmado", data=pdf_bytes, file_name=f"Consentimiento_{nom_p}.pdf", mime="application/pdf")
