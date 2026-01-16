@@ -16,7 +16,7 @@ from PIL import Image
 import os
 
 # ==========================================
-# 1. CONFIGURACIÓN Y ESTILO
+# 1. CONFIGURACIÓN Y CATÁLOGOS
 # ==========================================
 st.set_page_config(page_title="Royal Dental Manager", page_icon="🦷", layout="wide", initial_sidebar_state="expanded")
 TZ_MX = pytz.timezone('America/Mexico_City')
@@ -63,7 +63,7 @@ def cargar_estilo_royal():
 cargar_estilo_royal()
 
 # ==========================================
-# 2. MOTOR DE BASE DE DATOS (SQLITE)
+# 2. BASE DE DATOS
 # ==========================================
 DB_FILE = "royal_dental_db.sqlite"
 
@@ -78,14 +78,20 @@ def migrar_tablas():
     # Campos Historia Clínica
     campos_nuevos = ['antecedentes_medicos', 'ahf', 'app', 'apnp', 'sexo', 'domicilio', 'tutor', 'contacto_emergencia', 'ocupacion', 'estado_civil', 'motivo_consulta', 'exploracion_fisica', 'diagnostico']
     for col in campos_nuevos:
-        try: c.execute(f"ALTER TABLE pacientes ADD COLUMN {col} TEXT")
-        except: pass
+        try:
+            c.execute(f"ALTER TABLE pacientes ADD COLUMN {col} TEXT")
+        except:
+            pass
     
     # Campos Citas
-    try: c.execute("ALTER TABLE citas ADD COLUMN costo_laboratorio REAL")
-    except: pass
-    try: c.execute("ALTER TABLE citas ADD COLUMN categoria TEXT")
-    except: pass
+    try:
+        c.execute("ALTER TABLE citas ADD COLUMN costo_laboratorio REAL")
+    except:
+        pass
+    try:
+        c.execute("ALTER TABLE citas ADD COLUMN categoria TEXT")
+    except:
+        pass
     
     conn.commit()
     conn.close()
@@ -125,7 +131,7 @@ def seed_data():
     c = conn.cursor()
     c.execute("SELECT count(*) FROM servicios")
     if c.fetchone()[0] == 0:
-        # LISTA EXTENDIDA PARA TU TRANQUILIDAD
+        # LISTA EXTENDIDA VERTICALMENTE
         tratamientos = [
             ("Preventiva", "Profilaxis (Limpieza Ultrasónica)", 600.0, 0.0),
             ("Preventiva", "Aplicación de Flúor (Niños)", 350.0, 0.0),
@@ -167,9 +173,14 @@ seed_data()
 # ==========================================
 # 3. HELPERS Y SANITIZACIÓN
 # ==========================================
-def get_fecha_mx(): return datetime.now(TZ_MX).strftime("%d/%m/%Y")
-def get_hora_mx(): return datetime.now(TZ_MX).strftime("%H:%M:%S")
-def format_date_latino(date_obj): return date_obj.strftime("%d/%m/%Y")
+def get_fecha_mx():
+    return datetime.now(TZ_MX).strftime("%d/%m/%Y")
+
+def get_hora_mx():
+    return datetime.now(TZ_MX).strftime("%H:%M:%S")
+
+def format_date_latino(date_obj):
+    return date_obj.strftime("%d/%m/%Y")
 
 def sanitizar(texto):
     if not texto: return ""
@@ -203,7 +214,8 @@ def registrar_movimiento(doctor, tipo):
     try:
         if tipo == "Entrada":
             c.execute("SELECT * FROM asistencia WHERE doctor=? AND fecha=? AND hora_salida = ''", (doctor, hoy))
-            if c.fetchone(): return False, "Ya tienes una sesión abierta."
+            if c.fetchone():
+                return False, "Ya tienes una sesión abierta."
             c.execute("INSERT INTO asistencia (fecha, doctor, hora_entrada, hora_salida, horas_totales, estado) VALUES (?,?,?,?,?,?)", 
                       (hoy, doctor, hora_actual, "", 0, "Pendiente"))
             conn.commit()
@@ -211,18 +223,23 @@ def registrar_movimiento(doctor, tipo):
         elif tipo == "Salida":
             c.execute("SELECT id_registro, hora_entrada FROM asistencia WHERE doctor=? AND fecha=? AND hora_salida = ''", (doctor, hoy))
             row = c.fetchone()
-            if not row: return False, "No tienes una entrada abierta hoy."
+            if not row:
+                return False, "No tienes una entrada abierta hoy."
             id_reg, h_ent = row
             fmt = "%H:%M:%S"
-            try: tdelta = datetime.strptime(hora_actual, fmt) - datetime.strptime(h_ent, fmt)
-            except: tdelta = timedelta(0)
+            try:
+                tdelta = datetime.strptime(hora_actual, fmt) - datetime.strptime(h_ent, fmt)
+            except:
+                tdelta = timedelta(0)
             horas = round(tdelta.total_seconds() / 3600, 2)
             c.execute("UPDATE asistencia SET hora_salida=?, horas_totales=?, estado=? WHERE id_registro=?", 
                       (hora_actual, horas, "Finalizado", id_reg))
             conn.commit()
             return True, f"Salida registrada: {hora_actual} ({horas} horas)"
-    except Exception as e: return False, str(e)
-    finally: conn.close()
+    except Exception as e:
+        return False, str(e)
+    finally:
+        conn.close()
 
 def format_tel_visual(tel):
     if not tel or len(tel) != 10: return tel
@@ -237,7 +254,8 @@ def calcular_edad_completa(nacimiento_input):
             nacimiento = nacimiento_input
         edad = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
         return edad, "MENOR" if edad < 18 else "ADULTO"
-    except: return "N/A", ""
+    except:
+        return "N/A", ""
 
 def generar_id_unico(nombre, paterno, nacimiento):
     try:
@@ -248,9 +266,11 @@ def generar_id_unico(nombre, paterno, nacimiento):
         part3 = str(nacimiento.year)
         random_chars = ''.join(random.choices(string.ascii_uppercase + string.digits, k=3))
         return f"{part1}{part2}-{part3}-{random_chars}"
-    except: return f"P-{int(time.time())}"
+    except:
+        return f"P-{int(time.time())}"
 
-def formatear_telefono_db(numero): return re.sub(r'\D', '', str(numero))
+def formatear_telefono_db(numero):
+    return re.sub(r'\D', '', str(numero))
 
 def generar_slots_tiempo():
     slots = []
@@ -274,7 +294,9 @@ def verificar_disponibilidad(fecha_str, hora_str):
 
 def calcular_rfc_10(nombre, paterno, materno, nacimiento):
     try:
-        nombre = sanitizar(nombre); paterno = sanitizar(paterno); materno = sanitizar(materno)
+        nombre = sanitizar(nombre)
+        paterno = sanitizar(paterno)
+        materno = sanitizar(materno)
         fecha = datetime.strptime(str(nacimiento), "%Y-%m-%d")
         letra1 = paterno[0]
         vocales = [c for c in paterno[1:] if c in "AEIOU"]
@@ -286,7 +308,8 @@ def calcular_rfc_10(nombre, paterno, materno, nacimiento):
         rfc_base = f"{letra1}{letra2}{letra3}{letra4}{fecha_str}".upper()
         if rfc_base[:4] in ["PUTO", "PITO", "CULO", "MAME"]: rfc_base = f"{rfc_base[:3]}X{rfc_base[4:]}"
         return rfc_base
-    except: return ""
+    except:
+        return ""
 
 # ==========================================
 # 4. GENERADOR DE PDF PROFESIONALES
@@ -297,8 +320,10 @@ class PDFGenerator(FPDF):
         
     def header(self):
         if os.path.exists(LOGO_FILE):
-            try: self.image(LOGO_FILE, 10, 8, 33)
-            except: pass
+            try:
+                self.image(LOGO_FILE, 10, 8, 33)
+            except:
+                pass
         self.set_font('Arial', 'B', 14)
         self.set_text_color(0, 43, 91)
         self.cell(0, 10, 'ROYAL DENTAL', 0, 1, 'R')
@@ -331,7 +356,8 @@ def procesar_firma(firma_data):
         fname = f"temp_sig_{int(time.time())}_{random.randint(1,100)}.png"
         img.save(fname)
         return fname
-    except: return None
+    except:
+        return None
 
 def crear_pdf_consentimiento(paciente_full, doctor, cedula, tipo, tratamiento, riesgos, f_pac, f_doc, f_t1, f_t2, edad):
     pdf = PDFGenerator()
@@ -458,4 +484,185 @@ if 'perfil' not in st.session_state: st.session_state.perfil = None
 def pantalla_login():
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        if os.path.exists(LOGO_FILE): st.
+        if os.path.exists(LOGO_FILE):
+            st.image(LOGO_FILE, use_container_width=True)
+        st.markdown("<h2 style='text-align:center; color:#002B5B'>ROYAL DENTAL ERP</h2>", unsafe_allow_html=True)
+        u = st.selectbox("Usuario", ["Consultorio", "Administración"])
+        p = st.text_input("Contraseña", type="password")
+        if st.button("Entrar", type="primary", use_container_width=True):
+            if u=="Consultorio" and p=="ROYALCLINIC": 
+                st.session_state.perfil="Consultorio"
+                st.rerun()
+            elif u=="Administración" and p=="ROYALADMIN": 
+                st.session_state.perfil="Admin"
+                st.rerun()
+            else: 
+                st.error("Acceso Denegado")
+
+def vista_consultorio():
+    if os.path.exists(LOGO_FILE):
+        st.sidebar.image(LOGO_FILE, use_column_width=True)
+    
+    menu = st.sidebar.radio("Menú", ["Agenda", "Pacientes", "Finanzas", "Legal", "Asistencia"])
+    
+    with st.sidebar.expander("🛠️ Mantenimiento"):
+        if st.button("🗑️ RESETEAR BASE DE DATOS", type="primary"):
+            c = get_db_connection().cursor()
+            c.execute("DELETE FROM pacientes")
+            c.execute("DELETE FROM citas")
+            c.execute("DELETE FROM asistencia")
+            get_db_connection().commit()
+            st.cache_data.clear() 
+            st.error("Sistema limpio."); time.sleep(1); st.rerun()
+            
+    if st.sidebar.button("Cerrar Sesión"):
+        st.session_state.perfil = None
+        st.rerun()
+
+    conn = get_db_connection()
+
+    if menu == "Agenda":
+        st.title("📅 Agenda")
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            with st.expander("Nueva Cita", expanded=True):
+                with st.form("cita", clear_on_submit=False):
+                    p_raw = pd.read_sql("SELECT id_paciente, nombre, apellido_paterno FROM pacientes", conn)
+                    lp = p_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist() if not p_raw.empty else []
+                    p_sel = st.selectbox("Paciente", ["..."]+lp)
+                    h = st.selectbox("Hora", generar_slots_tiempo())
+                    m = st.text_input("Motivo")
+                    d = st.selectbox("Dr", list(DOCS_INFO.keys()))
+                    urg = st.checkbox("Sobrecupo")
+                    if st.form_submit_button("Agendar"):
+                        oc = verificar_disponibilidad(get_fecha_mx(), h)
+                        if oc and not urg: st.error("Horario Ocupado")
+                        elif p_sel != "...":
+                            c = conn.cursor()
+                            c.execute("INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, estado_pago) VALUES (?,?,?,?,?,?,?,?,?)",
+                                      (int(time.time()), get_fecha_mx(), h, p_sel.split(" - ")[0], p_sel.split(" - ")[1], "General", sanitizar(m), d, "Pendiente"))
+                            conn.commit(); st.success("Agendado"); time.sleep(1); st.rerun()
+        with c2:
+            st.markdown(f"#### Citas Hoy: {get_fecha_mx()}")
+            df = pd.read_sql(f"SELECT * FROM citas WHERE fecha='{get_fecha_mx()}'", conn)
+            if not df.empty:
+                for _, r in df.iterrows(): st.info(f"{r['hora']} - {r['nombre_paciente']} ({r['tratamiento']})")
+
+    elif menu == "Pacientes":
+        st.title("📂 Pacientes"); tab1, tab2 = st.tabs(["Nuevo", "Buscar"])
+        with tab1:
+            with st.form("alta", clear_on_submit=False):
+                c1, c2, c3 = st.columns(3); n = c1.text_input("Nombre"); p = c2.text_input("Apellidos"); m = c3.text_input("Materno")
+                c4, c5, c6 = st.columns(3); fn = c4.date_input("Nacimiento", datetime(1990,1,1)); sex = c5.selectbox("Sexo", ["Masculino", "Femenino"]); ec = c6.selectbox("Edo. Civil", ["Soltero", "Casado"])
+                tel = st.text_input("Teléfono"); dom = st.text_input("Domicilio"); mail = st.text_input("Email"); ocup = st.text_input("Ocupación")
+                rfc = st.text_input("RFC (Automático)", disabled=True)
+                st.markdown("---")
+                ahf = st.text_area("AHF (Hereditarios)"); app = st.text_area("APP (Alergias)"); apnp = st.text_area("APNP (Hábitos)")
+                if st.form_submit_button("Guardar"):
+                    if n and p and len(tel)==10:
+                        nid = generar_id_unico(sanitizar(n), sanitizar(p), fn)
+                        rfc_calc = calcular_rfc_10(n, p, m, fn)
+                        c = conn.cursor()
+                        c.execute("INSERT INTO pacientes (id_paciente, nombre, apellido_paterno, apellido_materno, fecha_nacimiento, sexo, telefono, email, domicilio, ocupacion, estado_civil, rfc, ahf, app, apnp) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                  (nid, sanitizar(n), sanitizar(p), sanitizar(m), format_date_latino(fn), sex, tel, limpiar_email(mail), sanitizar(dom), sanitizar(ocup), ec, rfc_calc, sanitizar(ahf), sanitizar(app), sanitizar(apnp)))
+                        conn.commit(); st.success("Guardado"); time.sleep(1); st.rerun()
+                    else: st.error("Datos incompletos")
+        with tab2:
+            p_raw = pd.read_sql("SELECT * FROM pacientes", conn)
+            if not p_raw.empty:
+                sel = st.selectbox("Paciente:", ["..."] + p_raw['nombre'].tolist())
+                if sel != "...":
+                    row = p_raw[p_raw['nombre'] == sel].iloc[0]
+                    st.write(f"Edad: {calcular_edad_completa(row['fecha_nacimiento'])[0]} | Tel: {row['telefono']}")
+                    hist = pd.read_sql(f"SELECT * FROM citas WHERE id_paciente='{row['id_paciente']}'", conn)
+                    if st.button("📄 PDF Historia Clínica"):
+                        pdf = crear_pdf_historia(row, hist)
+                        st.download_button("Descargar", pdf, f"Historia_{sel}.pdf", "application/pdf")
+
+    elif menu == "Finanzas":
+        st.title("💰 Finanzas"); p_raw = pd.read_sql("SELECT * FROM pacientes", conn); s_raw = pd.read_sql("SELECT * FROM servicios", conn)
+        if not p_raw.empty:
+            sel_p = st.selectbox("Paciente:", p_raw['nombre'].tolist())
+            id_p = p_raw[p_raw['nombre']==sel_p].iloc[0]['id_paciente']
+            
+            c1, c2 = st.columns(2)
+            cat = c1.selectbox("Categoría", s_raw['categoria'].unique() if not s_raw.empty else ["Manual"])
+            trat = c2.selectbox("Tratamiento", s_raw[s_raw['categoria']==cat]['nombre_tratamiento'].unique() if not s_raw.empty else [])
+            
+            riesgo_auto = RIESGOS_DB.get(trat, "Riesgos generales.")
+            riesgo_edit = st.text_area("Riesgos (Editable para Contrato)", value=riesgo_auto)
+            
+            costo = float(s_raw[s_raw['nombre_tratamiento']==trat].iloc[0]['precio_lista']) if not s_raw.empty else 0.0
+            
+            with st.form("caja"):
+                pf = st.number_input("Precio Final", value=costo); ab = st.number_input("Abono"); sal = pf - ab
+                st.metric("Saldo", f"${sal:,.2f}")
+                
+                num_sessions = st.number_input("Sesiones Estimadas", min_value=1, value=1)
+                
+                doc = st.selectbox("Doctor", list(DOCS_INFO.keys()))
+                
+                if st.form_submit_button("Registrar Cobro"):
+                    c = conn.cursor()
+                    nota_int = f"Riesgo Legal: {sanitizar(riesgo_edit)}"
+                    c.execute("INSERT INTO citas (id_paciente, nombre_paciente, tratamiento, precio_final, monto_pagado, saldo_pendiente, doctor_atendio, notas, fecha, timestamp) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                              (id_p, sel_p, trat, pf, ab, sal, doc, nota_int, get_fecha_mx(), int(time.time())))
+                    conn.commit(); st.success("Cobrado"); time.sleep(1); st.rerun()
+
+    elif menu == "Legal":
+        st.title("⚖️ Documentos"); p_raw = pd.read_sql("SELECT * FROM pacientes", conn)
+        if not p_raw.empty:
+            sel_p = st.selectbox("Paciente:", p_raw['nombre'].tolist())
+            row_p = p_raw[p_raw['nombre']==sel_p].iloc[0]
+            
+            tipo = st.selectbox("Documento", ["Consentimiento Informado", "Aviso Privacidad"])
+            doc = st.selectbox("Doctor", list(DOCS_INFO.keys()))
+            
+            trat_pdf = st.selectbox("Tratamiento:", pd.read_sql("SELECT nombre_tratamiento FROM servicios", conn)['nombre_tratamiento'].tolist())
+            riesgo_pdf = st.text_area("Riesgos", value=RIESGOS_DB.get(trat_pdf, ""))
+            
+            st.markdown("### Firmas Digitales")
+            
+            with st.expander("Firma Paciente", expanded=True): 
+                canvas_pac = st_canvas(stroke_width=2, height=100, key="c_pac")
+                
+            with st.expander("Firma Doctor"): 
+                canvas_doc = st_canvas(stroke_width=2, height=100, key="c_doc")
+                
+            with st.expander("Testigo 1"): 
+                canvas_t1 = st_canvas(stroke_width=2, height=100, key="c_t1")
+                
+            with st.expander("Testigo 2"): 
+                canvas_t2 = st_canvas(stroke_width=2, height=100, key="c_t2")
+            
+            if st.button("Generar PDF Legal"):
+                def cap(cv):
+                    if cv.image_data is None: return None
+                    if np.all(cv.image_data[:,:,3] == 0): return None 
+                    import io; from PIL import Image
+                    img = Image.fromarray(cv.image_data.astype('uint8'), 'RGBA')
+                    buf = io.BytesIO(); img.save(buf, format="PNG")
+                    return base64.b64encode(buf.getvalue()).decode()
+                
+                fp, fd, ft1, ft2 = cap(canvas_pac), cap(canvas_doc), cap(canvas_t1), cap(canvas_t2)
+                
+                doc_full = DOCS_INFO[doc]['nombre']; cedula = DOCS_INFO[doc]['cedula']
+                p_full = f"{row_p['nombre']} {row_p['apellido_paterno']}"
+                edad, _ = calcular_edad_completa(row_p['fecha_nacimiento'])
+                
+                pdf_bytes = crear_pdf_consentimiento(p_full, doc_full, cedula, tipo, trat_pdf, riesgo_pdf, fp, fd, ft1, ft2, edad)
+                st.download_button("Descargar PDF Firmado", pdf_bytes, "Legal.pdf", "application/pdf")
+
+    elif menu == "Asistencia":
+        st.title("⏱️ Checador"); c1, c2 = st.columns(2)
+        if c1.button("Entrada"): 
+            ok, m = registrar_movimiento("Dr. Emmanuel", "Entrada"); st.success(m) if ok else st.warning(m)
+        if c2.button("Salida"): 
+            ok, m = registrar_movimiento("Dr. Emmanuel", "Salida"); st.success(m) if ok else st.warning(m)
+
+    conn.close()
+
+if __name__ == "__main__":
+    if st.session_state.perfil is None: pantalla_login()
+    elif st.session_state.perfil == "Consultorio": vista_consultorio()
+    elif st.session_state.perfil == "Admin": st.title("Admin"); st.button("Salir", on_click=lambda: st.session_state.perfil=None)
