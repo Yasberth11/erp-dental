@@ -398,11 +398,29 @@ def vista_consultorio():
     st.sidebar.caption(f"Fecha: {get_fecha_mx()}")
     menu = st.sidebar.radio("Menú", ["1. Agenda & Citas", "2. Gestión Pacientes", "3. Planes de Tratamiento", "4. Documentos & Firmas", "5. Control Asistencia"])
     
+    # ===================== MANTENIMIENTO FIX (PRIORIDAD 0) =====================
     with st.sidebar.expander("🛠️ Mantenimiento"):
         if st.button("🗑️ RESETEAR BASE DE DATOS (CUIDADO)", type="primary"):
-            c = get_db_connection().cursor()
-            c.execute("DELETE FROM pacientes"); c.execute("DELETE FROM citas"); c.execute("DELETE FROM asistencia")
-            get_db_connection().commit(); st.cache_data.clear(); st.success("Sistema limpio."); time.sleep(1); st.rerun()
+            try:
+                # PASO 1: Conexión explícita
+                conn_temp = get_db_connection()
+                c_temp = conn_temp.cursor()
+                # PASO 2: Borrado
+                c_temp.execute("DELETE FROM pacientes")
+                c_temp.execute("DELETE FROM citas")
+                c_temp.execute("DELETE FROM asistencia")
+                # PASO 3: Commit real y cierre
+                conn_temp.commit()
+                conn_temp.close()
+                # PASO 4: Limpiar Cache
+                st.cache_data.clear()
+                if 'perfil' in st.session_state: del st.session_state['perfil']
+                st.success("✅ Sistema y memoria limpiados.")
+                time.sleep(1)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error crítico: {e}")
+    # ===========================================================================
 
     if st.sidebar.button("Cerrar Sesión"): st.session_state.perfil = None; st.rerun()
     conn = get_db_connection()
@@ -439,8 +457,8 @@ def vista_consultorio():
                                 id_p = p_sel.split(" - ")[0]; nom_p = p_sel.split(" - ")[1]
                                 c = conn.cursor()
                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, monto_pagado, saldo_pendiente, estado_pago, precio_lista, precio_final, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, notas, fecha_pago, costo_laboratorio, categoria) 
-                                             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                                          (int(time.time()), fecha_ver_str, h_sel, id_p, nom_p, "General", sanitizar(m_sel), d_sel, 0, 0, "Pendiente", 0, 0, 0, "No", 0, 0, "", "No", "", "", 0, "General"))
+                                                                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                                         (int(time.time()), fecha_ver_str, h_sel, id_p, nom_p, "General", sanitizar(m_sel), d_sel, 0, 0, "Pendiente", 0, 0, 0, "No", 0, 0, "", "No", "", "", 0, "General"))
                                 conn.commit(); st.success(f"Agendado"); time.sleep(1); st.rerun()
                             else: st.error("Seleccione paciente")
 
@@ -456,7 +474,7 @@ def vista_consultorio():
                                 id_temp = f"PROS-{int(time.time())}"; nom_final = sanitizar(nombre_pros)
                                 c = conn.cursor()
                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, estado_pago, notas, precio_lista, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, fecha_pago, costo_laboratorio, categoria) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                                          (int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, "Primera Vez", sanitizar(motivo_pros), doc_pros, 0, 0, 0, "Pendiente", f"Tel: {tel_pros}", 0, 0, "No", 0, 0, "", "No", "", 0, "Primera Vez"))
+                                         (int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, "Primera Vez", sanitizar(motivo_pros), doc_pros, 0, 0, 0, "Pendiente", f"Tel: {tel_pros}", 0, 0, "No", 0, 0, "", "No", "", 0, "Primera Vez"))
                                 conn.commit(); st.success("Agendado"); time.sleep(1); st.rerun()
                             else: st.error("Datos incorrectos")
             
@@ -478,13 +496,13 @@ def vista_consultorio():
                         with c_cancel:
                              st.write(""); st.write(""); 
                              if st.button("❌ Cancelar", type="secondary"):
-                                c = conn.cursor(); c.execute("UPDATE citas SET estado_pago='CANCELADO' WHERE fecha=? AND hora=? AND nombre_paciente=?", (fecha_ver_str, hora_target, nom_target))
-                                conn.commit(); st.warning("Cancelada"); time.sleep(1); st.rerun()
+                                 c = conn.cursor(); c.execute("UPDATE citas SET estado_pago='CANCELADO' WHERE fecha=? AND hora=? AND nombre_paciente=?", (fecha_ver_str, hora_target, nom_target))
+                                 conn.commit(); st.warning("Cancelada"); time.sleep(1); st.rerun()
                         with c_delete:
                              st.write(""); st.write(""); 
                              if st.button("🗑️ Eliminar Def.", type="primary"):
-                                c = conn.cursor(); c.execute("DELETE FROM citas WHERE fecha=? AND hora=? AND nombre_paciente=?", (fecha_ver_str, hora_target, nom_target))
-                                conn.commit(); registrar_auditoria("Consultorio", "ELIMINACION CITA", f"Se eliminó cita de {nom_target}"); st.error("Eliminado."); time.sleep(1); st.rerun()
+                                 c = conn.cursor(); c.execute("DELETE FROM citas WHERE fecha=? AND hora=? AND nombre_paciente=?", (fecha_ver_str, hora_target, nom_target))
+                                 conn.commit(); registrar_auditoria("Consultorio", "ELIMINACION CITA", f"Se eliminó cita de {nom_target}"); st.error("Eliminado."); time.sleep(1); st.rerun()
 
         with col_cal2:
             st.markdown(f"#### 📋 {fecha_ver_str}")
@@ -567,7 +585,7 @@ def vista_consultorio():
                     nuevo_id = generar_id_unico(sanitizar(nombre), sanitizar(paterno), nacimiento)
                     c = conn.cursor()
                     c.execute("INSERT INTO pacientes (id_paciente, fecha_registro, nombre, apellido_paterno, apellido_materno, telefono, email, rfc, regimen, uso_cfdi, cp, nota_fiscal, sexo, estado, fecha_nacimiento, antecedentes_medicos, ahf, app, apnp, ocupacion, estado_civil, domicilio, tutor, contacto_emergencia, motivo_consulta, exploracion_fisica, diagnostico) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                              (nuevo_id, get_fecha_mx(), sanitizar(nombre), sanitizar(paterno), sanitizar(materno), tel, limpiar_email(email), rfc_final, regimen, uso_cfdi, cp, "", sexo, "Activo", format_date_latino(nacimiento), "", sanitizar(ahf), sanitizar(app), sanitizar(apnp), sanitizar(ocupacion), estado_civil, sanitizar(domicilio), sanitizar(tutor), sanitizar(contacto_emer), sanitizar(motivo_consulta), sanitizar(exploracion), sanitizar(diagnostico)))
+                             (nuevo_id, get_fecha_mx(), sanitizar(nombre), sanitizar(paterno), sanitizar(materno), tel, limpiar_email(email), rfc_final, regimen, uso_cfdi, cp, "", sexo, "Activo", format_date_latino(nacimiento), "", sanitizar(ahf), sanitizar(app), sanitizar(apnp), sanitizar(ocupacion), estado_civil, sanitizar(domicilio), sanitizar(tutor), sanitizar(contacto_emer), sanitizar(motivo_consulta), sanitizar(exploracion), sanitizar(diagnostico)))
                     conn.commit(); st.success(f"✅ Paciente {nombre} guardado."); time.sleep(1.5); st.rerun()
         with tab_e:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
@@ -598,7 +616,7 @@ def vista_consultorio():
                         if st.form_submit_button("💾 ACTUALIZAR TODO"):
                             c = conn.cursor()
                             c.execute("UPDATE pacientes SET nombre=?, apellido_paterno=?, apellido_materno=?, telefono=?, email=?, app=?, ahf=?, apnp=?, rfc=?, cp=?, regimen=? WHERE id_paciente=?", 
-                                      (sanitizar(e_nom), sanitizar(e_pat), sanitizar(e_mat), formatear_telefono_db(e_tel), limpiar_email(e_email), sanitizar(e_app), sanitizar(e_ahf), sanitizar(e_apnp), sanitizar(e_rfc), e_cp, e_reg, id_target))
+                                     (sanitizar(e_nom), sanitizar(e_pat), sanitizar(e_mat), formatear_telefono_db(e_tel), limpiar_email(e_email), sanitizar(e_app), sanitizar(e_ahf), sanitizar(e_apnp), sanitizar(e_rfc), e_cp, e_reg, id_target))
                             conn.commit(); st.success("Datos actualizados."); time.sleep(1.5); st.rerun()
 
     elif menu == "3. Planes de Tratamiento":
@@ -643,10 +661,10 @@ def vista_consultorio():
                         # GUARDAR RIESGO AUTOMATICO EN NOTAS OCULTAS O VISIBLES
                         nota_final = f"{sanitizar(notas)} | RIESGO: {riesgo_auto}"
                         c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                                  (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, abono, saldo, get_fecha_mx(), costo_lab))
+                                 (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, abono, saldo, get_fecha_mx(), costo_lab))
                         if agendar:
                             c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, estado_pago, categoria) VALUES (?,?,?,?,?,?,?,?,?,?)''',
-                                      (int(time.time())+1, format_date_latino(f_cita), h_cita, id_p, nom_p, "Tratamiento", trat_sel, doc_name, "Pendiente", cat_sel))
+                                     (int(time.time())+1, format_date_latino(f_cita), h_cita, id_p, nom_p, "Tratamiento", trat_sel, doc_name, "Pendiente", cat_sel))
                         conn.commit(); st.success("Registrado"); time.sleep(1); st.rerun()
 
     elif menu == "4. Documentos & Firmas":
