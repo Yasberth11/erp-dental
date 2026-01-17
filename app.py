@@ -29,6 +29,16 @@ DOCS_INFO = {
     "Dra. Mónica": {"nombre": "Dra. Monica Montserrat Rodriguez Alvarez", "cedula": "87654321"}
 }
 
+# LISTAS MAESTRAS (NUEVO REQUERIMIENTO V26.0)
+LISTA_OCUPACIONES = [
+    "Estudiante", "Empleado/a", "Empresario/a", "Hogar", "Comerciante", 
+    "Docente", "Sector Salud", "Jubilado/a", "Desempleado/a", "Otro"
+]
+
+LISTA_PARENTESCOS = [
+    "Madre", "Padre", "Abuelo(a)", "Tío(a)", "Hermano(a) Mayor", "Tutor Legal Designado", "Otro"
+]
+
 # TEXTOS JURÍDICOS
 CLAUSULA_CIERRE = "Adicionalmente, entiendo que pueden presentarse eventos imprevisibles en cualquier acto médico, tales como: reacciones alérgicas a los anestésicos o materiales (incluso si no tengo antecedentes conocidos), síncope (desmayo), trismus (dificultad para abrir la boca), hematomas, o infecciones secundarias. Acepto que el éxito del tratamiento depende también de mi biología y de seguir estrictamente las indicaciones post-operatorias."
 TXT_DATOS_SENSIBLES = "DATOS PERSONALES SENSIBLES: Además de los datos de identificación, y para cumplir con la Normatividad Sanitaria (NOM-004-SSA3-2012 y NOM-013-SSA2-2015), recabamos: Estado de salud presente, pasado y futuro; Antecedentes Heredo-Familiares y Patológicos; Historial Farmacológico y Alergias; Hábitos de vida (tabaquismo/alcoholismo); e Imágenes diagnósticas/Biometría."
@@ -94,6 +104,12 @@ def get_db_connection():
 def migrar_tablas():
     conn = get_db_connection()
     c = conn.cursor()
+    # MIGRACION V26.0: Nuevos campos de emergencia y parentesco
+    cols_v26 = ['parentesco_tutor', 'telefono_emergencia']
+    for col in cols_v26:
+        try: c.execute(f"ALTER TABLE pacientes ADD COLUMN {col} TEXT")
+        except: pass
+
     for col in ['antecedentes_medicos', 'ahf', 'app', 'apnp', 'sexo', 'domicilio', 'tutor', 'contacto_emergencia', 'ocupacion', 'estado_civil', 'motivo_consulta', 'exploracion_fisica', 'diagnostico']:
         try: c.execute(f"ALTER TABLE pacientes ADD COLUMN {col} TEXT")
         except: pass
@@ -135,7 +151,7 @@ def init_db():
         apellido_materno TEXT, telefono TEXT, email TEXT, rfc TEXT, regimen TEXT, 
         uso_cfdi TEXT, cp TEXT, nota_fiscal TEXT, sexo TEXT, estado TEXT, fecha_nacimiento TEXT,
         antecedentes_medicos TEXT, ahf TEXT, app TEXT, apnp TEXT,
-        domicilio TEXT, tutor TEXT, contacto_emergencia TEXT,
+        domicilio TEXT, tutor TEXT, parentesco_tutor TEXT, contacto_emergencia TEXT, telefono_emergencia TEXT,
         ocupacion TEXT, estado_civil TEXT, motivo_consulta TEXT, exploracion_fisica TEXT, diagnostico TEXT
     )''')
     c.execute('''CREATE TABLE IF NOT EXISTS citas (
@@ -170,21 +186,17 @@ def get_fecha_mx(): return datetime.now(TZ_MX).strftime("%d/%m/%Y")
 def get_hora_mx(): return datetime.now(TZ_MX).strftime("%H:%M:%S")
 def format_date_latino(date_obj): return date_obj.strftime("%d/%m/%Y")
 
-# [NUEVO] FORMATO PARA NOMBRES (MAYUSCULAS SIN ACENTOS)
 def formato_nombre_legal(texto):
     if not texto: return ""
     texto = str(texto).upper().strip()
-    # Mapeo completo de acentos
     for old, new in {'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U','Ü':'U','Ñ':'N'}.items(): 
         texto = texto.replace(old, new)
     return " ".join(texto.split())
 
-# [NUEVO] FORMATO PARA TEXTO GENERAL (DOMICILIO, OCUPACIÓN - ALTA Y BAJAS)
 def formato_titulo(texto):
     if not texto: return ""
     return str(texto).strip().title()
 
-# [NUEVO] FORMATO PARA NOTAS Y ANTECEDENTES (ORACIÓN)
 def formato_oracion(texto):
     if not texto: return ""
     txt = str(texto).strip()
@@ -298,7 +310,6 @@ def procesar_firma_digital(firma_img_data):
 def crear_pdf_consentimiento(paciente_full, nombre_doctor, cedula_doctor, tipo_doc, tratamiento, riesgo_legal, firma_pac, firma_doc, testigos_data, nivel_riesgo):
     pdf = PDFGenerator(); pdf.add_page()
     fecha_hoy = get_fecha_mx()
-    # Asegurar nombre legal en PDF
     paciente_full = formato_nombre_legal(paciente_full)
     nombre_doctor = formato_nombre_legal(nombre_doctor)
     
@@ -351,7 +362,8 @@ AUTORIZACIÓN: Autorizo la anestesia local y procedimientos necesarios, asumiend
     y_firmas = pdf.get_y()
     
     pdf.set_font('Arial', 'B', 8)
-    pdf.text(20, y_firmas + 40, "FIRMA DEL PACIENTE")
+    # [FIX V26.0] FIRMA PACIENTE O TUTOR PARA MENORES
+    pdf.text(20, y_firmas + 40, "FIRMA DEL PACIENTE / TUTOR RESPONSABLE")
     pdf.text(20, y_firmas + 45, paciente_full) 
     
     if firma_pac:
@@ -393,7 +405,7 @@ def crear_pdf_historia(p, historial):
     pdf.set_fill_color(230, 230, 230); pdf.set_font('Arial', 'B', 10)
     pdf.cell(0, 6, "I. FICHA DE IDENTIFICACIÓN", 1, 1, 'L', True)
     pdf.set_font('Arial', '', 9)
-    info = f"""Nombre: {nombre_p}\nEdad: {edad} | Sexo: {p.get('sexo','N/A')} | Nacimiento: {p.get('fecha_nacimiento','N/A')}\nOcupación: {formato_titulo(p.get('ocupacion','N/A'))} | Estado Civil: {formato_titulo(p.get('estado_civil','N/A'))}\nDomicilio: {formato_titulo(p.get('domicilio','N/A'))}\nTel: {p['telefono']} | Email: {p.get('email','N/A')}\nContacto Emergencia: {formato_nombre_legal(p.get('contacto_emergencia','N/A'))}\nTutor: {formato_nombre_legal(p.get('tutor','N/A'))}"""
+    info = f"""Nombre: {nombre_p}\nEdad: {edad} | Sexo: {p.get('sexo','N/A')} | Nacimiento: {p.get('fecha_nacimiento','N/A')}\nOcupación: {formato_titulo(p.get('ocupacion','N/A'))} | Estado Civil: {formato_titulo(p.get('estado_civil','N/A'))}\nDomicilio: {formato_titulo(p.get('domicilio','N/A'))}\nTel: {p['telefono']} | Email: {p.get('email','N/A')}\nContacto Emergencia: {formato_nombre_legal(p.get('contacto_emergencia','N/A'))} ({p.get('telefono_emergencia','S/N')})\nTutor: {formato_nombre_legal(p.get('tutor','N/A'))} ({p.get('parentesco_tutor','')})"""
     pdf.multi_cell(0, 5, info, 1); pdf.ln(2)
     
     pdf.set_font('Arial', 'B', 10); pdf.cell(0, 6, "II. ANTECEDENTES (ANAMNESIS)", 1, 1, 'L', True)
@@ -421,7 +433,7 @@ def crear_pdf_historia(p, historial):
             txt_fecha = str(row['fecha'])
             txt_trat = str(row['tratamiento'])[:45] 
             txt_nota = str(row['notas']) if row['notas'] else ""
-            txt_nota = formato_oracion(txt_nota) # Formato oración para notas
+            txt_nota = formato_oracion(txt_nota) 
             
             x_curr = pdf.get_x()
             y_curr = pdf.get_y()
@@ -638,46 +650,103 @@ def vista_consultorio():
         with tab_n:
             st.markdown("#### Formulario Alta (NOM-004)")
             with st.form("alta_paciente", clear_on_submit=True):
+                # DATOS PERSONALES BÁSICOS
                 c1, c2, c3 = st.columns(3)
-                nombre = c1.text_input("Nombre(s)"); paterno = c2.text_input("A. Paterno"); materno = c3.text_input("A. Materno")
+                nombre = c1.text_input("Nombre(s)")
+                paterno = c2.text_input("A. Paterno")
+                materno = c3.text_input("A. Materno")
+                
                 c4, c5, c6 = st.columns(3)
-                nacimiento = c4.date_input("Nacimiento", min_value=datetime(1920,1,1)); tel = c5.text_input("Tel (10 dígitos)", max_chars=10); email = c6.text_input("Email")
-                c7, c8_a, c8_b = st.columns([1,1,1])
-                sexo = c7.selectbox("Sexo", ["Masculino", "Femenino"])
-                rfc_base = c8_a.text_input("RFC (Opcional)", max_chars=10, help="Dejar vacío para calcular automático")
-                homoclave = c8_b.text_input("Homoclave", max_chars=3)
-                st.markdown("**Datos Adicionales**")
-                col_extra = st.columns(3)
-                ocupacion = col_extra[0].text_input("Ocupación")
-                estado_civil = col_extra[1].selectbox("Estado Civil", ["Soltero", "Casado", "Divorciado", "Viudo", "Unión Libre"])
-                domicilio = col_extra[2].text_input("Domicilio Completo")
-                col_extra2 = st.columns(2)
-                tutor = col_extra2[0].text_input("Nombre Tutor (Si es menor)")
-                contacto_emer = col_extra2[1].text_input("Contacto Emergencia (Nombre y Tel)")
-                motivo_consulta = st.text_area("Motivo de Consulta*")
+                nacimiento = c4.date_input("Nacimiento", min_value=datetime(1920,1,1))
+                sexo = c5.selectbox("Sexo", ["Masculino", "Femenino"])
+                ocupacion = c6.selectbox("Ocupación", LISTA_OCUPACIONES) # [NUEVO] LISTA DESPLEGABLE
+                
+                # DATOS DE CONTACTO Y ESTADO CIVIL
+                st.markdown("**Contacto y Civil**")
+                ce1, ce2, ce3 = st.columns(3)
+                tel = ce1.text_input("Celular Paciente (10)", max_chars=10)
+                email = ce2.text_input("Email")
+                estado_civil = ce3.selectbox("Estado Civil", ["Soltero", "Casado", "Divorciado", "Viudo", "Unión Libre"])
+                domicilio = st.text_input("Domicilio Completo")
+
+                # [NUEVO] VALIDACION DINÁMICA DE MENORES (TUTOR)
+                # Calculamos edad al vuelo para mostrar UI, pero la validación fuerte es al guardar
+                edad_calc = 0
+                if nacimiento:
+                    hoy = datetime.now().date()
+                    edad_calc = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
+                
+                if edad_calc < 18:
+                    st.info(f"👶 Paciente menor de edad ({edad_calc} años). Tutor obligatorio.")
+                
+                st.markdown("**Responsable / Tutor (Obligatorio si es menor)**")
+                ct1, ct2 = st.columns(2)
+                tutor = ct1.text_input("Nombre Completo Tutor")
+                parentesco = ct2.selectbox("Parentesco", LISTA_PARENTESCOS) # [NUEVO] LISTA DESPLEGABLE
+
+                st.markdown("**Contacto de Emergencia**")
+                # [NUEVO] SEPARACION NOMBRE Y TELEFONO
+                cem1, cem2 = st.columns(2)
+                contacto_emer_nom = cem1.text_input("Nombre Contacto Emergencia")
+                contacto_emer_tel = cem2.text_input("Tel Emergencia (10)", max_chars=10)
+
                 st.markdown("**Historia Médica**")
                 ahf = st.text_area("AHF", placeholder="Diabetes, Hipertensión..."); app = st.text_area("APP", placeholder="Alergias, Cirugías..."); apnp = st.text_area("APNP", placeholder="Tabaquismo, Alcoholismo...")
                 st.markdown("**Exploración y Diagnóstico (Dr)**")
                 exploracion = st.text_area("Exploración Física"); diagnostico = st.text_area("Diagnóstico Presuntivo")
-                st.markdown("**Fiscal**")
-                c9, c10, c11 = st.columns(3)
-                regimen = c9.selectbox("Régimen", get_regimenes_fiscales()); uso_cfdi = c10.selectbox("Uso CFDI", get_usos_cfdi()); cp = c11.text_input("C.P.", max_chars=5)
+                
+                # [NUEVO] FISCAL CONTRAÍDO
+                st.markdown("**Datos Fiscales**")
+                requiere_factura = st.checkbox("¿Requiere Factura?")
+                rfc_final = "" 
+                regimen = ""
+                uso_cfdi = ""
+                cp = ""
+                
+                if requiere_factura:
+                    cf1, cf2 = st.columns(2)
+                    rfc_base = cf1.text_input("RFC", max_chars=13)
+                    cp = cf2.text_input("C.P.", max_chars=5)
+                    cf3, cf4 = st.columns(2)
+                    regimen = cf3.selectbox("Régimen", get_regimenes_fiscales())
+                    uso_cfdi = cf4.selectbox("Uso CFDI", get_usos_cfdi())
+                    rfc_final = rfc_base # Se toma directo lo que escriban si factura
+                else:
+                    # RFC Genérico o calculado si no factura? Por ahora dejamos calculado interno si vacío
+                    pass
+
                 aviso = st.checkbox("Acepto Aviso de Privacidad")
+                
                 if st.form_submit_button("💾 GUARDAR EXPEDIENTE"):
+                    # VALIDACIONES DE NEGOCIO
                     if not aviso: st.error("Acepte Aviso Privacidad"); st.stop()
-                    if not tel.isdigit() or len(tel) != 10: st.error("Teléfono incorrecto"); st.stop()
+                    if not tel.isdigit() or len(tel) != 10: st.error("Teléfono Paciente incorrecto"); st.stop()
+                    if contacto_emer_tel and (not contacto_emer_tel.isdigit() or len(contacto_emer_tel) != 10): 
+                        st.error("Teléfono Emergencia incorrecto"); st.stop()
                     if not nombre or not paterno: st.error("Nombre incompleto"); st.stop()
-                    if not rfc_base: rfc_final = calcular_rfc_10(nombre, paterno, materno, nacimiento) + formato_nombre_legal(homoclave)
-                    else: rfc_final = formato_nombre_legal(rfc_base) + formato_nombre_legal(homoclave)
+                    
+                    # [NUEVO] VALIDACION DE MENOR
+                    if edad_calc < 18:
+                        if not tutor or not parentesco:
+                            st.error("⛔ ERROR: Para menores de 18 años, el Nombre del Tutor y Parentesco son OBLIGATORIOS."); st.stop()
+
+                    # RFC Lógica
+                    if not requiere_factura:
+                        # Calculamos uno genérico interno
+                        rfc_final = calcular_rfc_10(nombre, paterno, materno, nacimiento) + "XXX"
+                    
                     nuevo_id = generar_id_unico(nombre, paterno, nacimiento)
                     c = conn.cursor()
-                    # FORMATO DE INSERT: NOMBRES (LEGAL), OTROS (TITULO), NOTAS (ORACION)
-                    c.execute("INSERT INTO pacientes (id_paciente, fecha_registro, nombre, apellido_paterno, apellido_materno, telefono, email, rfc, regimen, uso_cfdi, cp, nota_fiscal, sexo, estado, fecha_nacimiento, antecedentes_medicos, ahf, app, apnp, ocupacion, estado_civil, domicilio, tutor, contacto_emergencia, motivo_consulta, exploracion_fisica, diagnostico) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                             (nuevo_id, get_fecha_mx(), formato_nombre_legal(nombre), formato_nombre_legal(paterno), formato_nombre_legal(materno), tel, limpiar_email(email), rfc_final, regimen, uso_cfdi, cp, "", sexo, "Activo", format_date_latino(nacimiento), "", formato_oracion(ahf), formato_oracion(app), formato_oracion(apnp), formato_titulo(ocupacion), estado_civil, formato_titulo(domicilio), formato_nombre_legal(tutor), formato_nombre_legal(contacto_emer), formato_oracion(motivo_consulta), formato_oracion(exploracion), formato_oracion(diagnostico)))
+                    
+                    # INSERT CON NUEVOS CAMPOS (telefono_emergencia, parentesco_tutor)
+                    c.execute("INSERT INTO pacientes (id_paciente, fecha_registro, nombre, apellido_paterno, apellido_materno, telefono, email, rfc, regimen, uso_cfdi, cp, nota_fiscal, sexo, estado, fecha_nacimiento, antecedentes_medicos, ahf, app, apnp, ocupacion, estado_civil, domicilio, tutor, contacto_emergencia, motivo_consulta, exploracion_fisica, diagnostico, parentesco_tutor, telefono_emergencia) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                             (nuevo_id, get_fecha_mx(), formato_nombre_legal(nombre), formato_nombre_legal(paterno), formato_nombre_legal(materno), tel, limpiar_email(email), formato_nombre_legal(rfc_final), regimen, uso_cfdi, cp, "", sexo, "Activo", format_date_latino(nacimiento), "", formato_oracion(ahf), formato_oracion(app), formato_oracion(apnp), formato_titulo(ocupacion), estado_civil, formato_titulo(domicilio), formato_nombre_legal(tutor), formato_nombre_legal(contacto_emer_nom), formato_oracion(motivo_consulta), formato_oracion(exploracion), formato_oracion(diagnostico), parentesco, contacto_emer_tel))
                     conn.commit(); st.success(f"✅ Paciente {nombre} guardado."); time.sleep(1.5); st.rerun()
+        
         with tab_e:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
+                # [FIX V25.0] SELECTOR ESTANDARIZADO
                 lista_edit = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 sel_edit = st.selectbox("Buscar Paciente:", ["Select..."] + lista_edit)
                 if sel_edit != "Select...":
@@ -690,7 +759,12 @@ def vista_consultorio():
                         e_tel = ec4.text_input("Teléfono", p['telefono']); e_email = ec5.text_input("Email", p['email'])
                         st.markdown("**Médico & Contacto**")
                         e_app = st.text_area("APP (Alergias)", p['app'] if p['app'] else ""); e_ahf = st.text_area("AHF", p['ahf'] if p['ahf'] else ""); e_apnp = st.text_area("APNP", p['apnp'] if p['apnp'] else "")
-                        e_cont = st.text_input("Contacto Emergencia", p.get('contacto_emergencia', ''))
+                        
+                        # [NUEVO] EDICION CONTACTO EMERGENCIA SEPARADO
+                        cem1, cem2 = st.columns(2)
+                        e_cont_nom = cem1.text_input("Nombre Contacto Emergencia", p.get('contacto_emergencia', ''))
+                        e_cont_tel = cem2.text_input("Tel Emergencia", p.get('telefono_emergencia', ''))
+
                         st.markdown("**Fiscal**")
                         ec6, ec7, ec8 = st.columns(3)
                         e_rfc = ec6.text_input("RFC Completo", p['rfc']); e_cp = ec7.text_input("C.P.", p['cp'])
@@ -698,16 +772,18 @@ def vista_consultorio():
                         reg_list = get_regimenes_fiscales()
                         if p['regimen'] in reg_list: idx_reg = reg_list.index(p['regimen'])
                         e_reg = ec8.selectbox("Régimen", reg_list, index=idx_reg)
+                        
                         if st.form_submit_button("💾 ACTUALIZAR TODO"):
                             c = conn.cursor()
-                            c.execute("UPDATE pacientes SET nombre=?, apellido_paterno=?, apellido_materno=?, telefono=?, email=?, app=?, ahf=?, apnp=?, rfc=?, cp=?, regimen=?, contacto_emergencia=? WHERE id_paciente=?", 
-                                     (formato_nombre_legal(e_nom), formato_nombre_legal(e_pat), formato_nombre_legal(e_mat), formatear_telefono_db(e_tel), limpiar_email(e_email), formato_oracion(e_app), formato_oracion(e_ahf), formato_oracion(e_apnp), formato_nombre_legal(e_rfc), e_cp, e_reg, formato_nombre_legal(e_cont), id_target))
+                            c.execute("UPDATE pacientes SET nombre=?, apellido_paterno=?, apellido_materno=?, telefono=?, email=?, app=?, ahf=?, apnp=?, rfc=?, cp=?, regimen=?, contacto_emergencia=?, telefono_emergencia=? WHERE id_paciente=?", 
+                                     (formato_nombre_legal(e_nom), formato_nombre_legal(e_pat), formato_nombre_legal(e_mat), formatear_telefono_db(e_tel), limpiar_email(e_email), formato_oracion(e_app), formato_oracion(e_ahf), formato_oracion(e_apnp), formato_nombre_legal(e_rfc), e_cp, e_reg, formato_nombre_legal(e_cont_nom), e_cont_tel, id_target))
                             conn.commit(); st.success("Datos actualizados."); time.sleep(1.5); st.rerun()
 
     elif menu == "3. Planes de Tratamiento":
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         if not pacientes.empty:
+            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]
             st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
@@ -753,6 +829,7 @@ def vista_consultorio():
                     else:
                         estatus = "Pagado" if saldo <= 0 else "Pendiente"
                         c = conn.cursor()
+                        # [FIX V25.2] LIMPIEZA DE NOTAS (DB FIX)
                         nota_final = formato_oracion(notas)
                         c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                  (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, abono, saldo, get_fecha_mx(), costo_lab))
@@ -764,11 +841,13 @@ def vista_consultorio():
     elif menu == "4. Documentos & Firmas":
         st.title("⚖️ Centro Legal"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
         if not df_p.empty:
+            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", ["..."]+df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             if sel != "...":
                 id_target = sel.split(" - ")[0]; p_obj = df_p[df_p['id_paciente'] == id_target].iloc[0]
                 tipo_doc = st.selectbox("Documento", ["Consentimiento Informado", "Aviso de Privacidad"])
                 
+                # [FIX V25.0] VARIABLES DE TESTIGOS SIEMPRE INICIALIZADAS (EVITA CRASH)
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK" 
