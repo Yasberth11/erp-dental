@@ -514,11 +514,13 @@ def crear_pdf_historia(p, historial):
             
     val = pdf.output(dest='S'); return val.encode('latin-1') if isinstance(val, str) else bytes(val)
 
-# [MODIFICADO V40.0] GENERADOR DE RECIBO DE PAGO INTELIGENTE
+# [MODIFICADO V40.1] GENERADOR DE RECIBO DE PAGO INTELIGENTE
 def crear_recibo_pago(datos_recibo):
     pdf = PDFGenerator(); pdf.add_page()
+    # Título Grande
     pdf.set_font('Arial', 'B', 16); pdf.cell(0, 10, 'RECIBO DE PAGO', 0, 1, 'C'); pdf.ln(5)
     
+    # Bloque de Datos Generales (Caja)
     pdf.set_fill_color(240, 240, 240); pdf.set_font('Arial', 'B', 10)
     pdf.cell(130, 8, "DATOS DEL PACIENTE", 1, 0, 'L', 1); pdf.cell(60, 8, "DETALLES DEL RECIBO", 1, 1, 'L', 1)
     pdf.set_font('Arial', '', 10)
@@ -526,8 +528,8 @@ def crear_recibo_pago(datos_recibo):
     pdf.cell(130, 8, f"RFC: {datos_recibo.get('rfc', 'XAXX010101000')}", 1, 0); pdf.cell(60, 8, f"Fecha: {datos_recibo['fecha']}", 1, 1)
     pdf.ln(5)
 
-    # [V40.0] NUEVA COLUMNA DOCTOR Y ANCHOS OPTIMIZADOS
-    # Anchos: CVO(8), TRAT(65), DOC(35), COSTO(20), ABONO(20), REST(20), MET(22) = 190
+    # Detalle del Movimiento ACTUAL (Tabla Central)
+    # [V40.1] Anchos reajustados para dar aire: Spacer(100) + Label(50) + Value(40) = 190
     pdf.set_font('Arial', 'B', 8); pdf.set_fill_color(220, 230, 240)
     pdf.cell(8, 8, "CVO", 1, 0, 'C', 1)
     pdf.cell(65, 8, "TRATAMIENTO", 1, 0, 'C', 1)
@@ -537,7 +539,7 @@ def crear_recibo_pago(datos_recibo):
     pdf.cell(20, 8, "SALDO", 1, 0, 'C', 1)
     pdf.cell(22, 8, "MÉTODO", 1, 1, 'C', 1)
     
-    pdf.set_font('Arial', '', 7) # Fuente más pequeña para que quepa "Transferencia"
+    pdf.set_font('Arial', '', 7)
     idx = 1
     if datos_recibo['items_hoy']:
         for item in datos_recibo['items_hoy']:
@@ -565,20 +567,30 @@ def crear_recibo_pago(datos_recibo):
             pdf.cell(40, 6, f"${d['saldo_pendiente']:,.2f}", 1, 1, 'R')
         pdf.ln(5)
 
-    pdf.set_font('Arial', 'B', 10)
-    pdf.cell(110, 8, "", 0, 0)
-    pdf.set_fill_color(240, 240, 240)
-    pdf.cell(40, 8, "TOTAL TRATAMIENTO:", 1, 0, 'R', 1)
-    pdf.cell(40, 8, f"${datos_recibo['total_tratamiento_hoy']:,.2f}", 1, 1, 'R')
-    pdf.cell(110, 8, "", 0, 0)
-    pdf.cell(40, 8, "TOTAL PAGADO:", 1, 0, 'R', 1)
-    pdf.cell(40, 8, f"${datos_recibo['total_pagado_hoy']:,.2f}", 1, 1, 'R')
+    # [V40.1] TOTALES MEJORADOS (Espaciado corregido)
+    pdf.set_font('Arial', 'B', 9) # Fuente ajustada
+    w_spacer = 100
+    w_label = 50
+    w_value = 40
     
+    pdf.cell(w_spacer, 8, "", 0, 0)
+    pdf.set_fill_color(240, 240, 240)
+    
+    # 1. Total Tratamiento
+    pdf.cell(w_label, 8, "TOTAL TRATAMIENTO:", 1, 0, 'R', 1)
+    pdf.cell(w_value, 8, f"${datos_recibo['total_tratamiento_hoy']:,.2f}", 1, 1, 'R')
+    
+    # 2. Total Pagado
+    pdf.cell(w_spacer, 8, "", 0, 0)
+    pdf.cell(w_label, 8, "TOTAL PAGADO:", 1, 0, 'R', 1)
+    pdf.cell(w_value, 8, f"${datos_recibo['total_pagado_hoy']:,.2f}", 1, 1, 'R')
+    
+    # 3. Pendiente
     if datos_recibo['saldo_total_global'] > 0:
-        pdf.cell(110, 8, "", 0, 0)
+        pdf.cell(w_spacer, 8, "", 0, 0)
         pdf.set_text_color(200, 0, 0)
-        pdf.cell(40, 8, "PENDIENTE DE PAGO:", 1, 0, 'R', 1)
-        pdf.cell(40, 8, f"${datos_recibo['saldo_total_global']:,.2f}", 1, 1, 'R')
+        pdf.cell(w_label, 8, "PENDIENTE DE PAGO:", 1, 0, 'R', 1)
+        pdf.cell(w_value, 8, f"${datos_recibo['saldo_total_global']:,.2f}", 1, 1, 'R')
         pdf.set_text_color(0, 0, 0)
     
     pdf.ln(10)
@@ -814,20 +826,19 @@ def vista_consultorio():
                     else: cat_sel = "Manual"; trat_sel = col_up2.text_input("Tratamiento"); precio_sug = 0.0; costo_lab = 0.0
                     doc_name = col_up3.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
                     
-                    with st.form("cobro", clear_on_submit=True):
-                        c1, c2, c3 = st.columns(3); precio = c1.number_input("Precio", value=precio_sug, step=50.0); abono = c2.number_input("Abono", step=50.0); saldo = precio - abono; c3.metric("Saldo", f"${saldo:,.2f}")
-                        c4, c5, c6 = st.columns([1.5, 1, 1]); metodo = c4.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia", "Garantía", "Pendiente de Pago"]); num_sessions = c5.number_input("Sesiones", min_value=1, value=1); agendar = c6.checkbox("¿Agendar Cita?")
-                        if agendar: 
-                            c7, c8 = st.columns(2); f_cita = c7.date_input("Fecha Cita", datetime.now(TZ_MX)); h_cita = c8.selectbox("Hora Cita", generar_slots_tiempo())
-                        else: f_cita = datetime.now(TZ_MX); h_cita = "00:00"
-                        notas = st.text_area("Notas Evolución", height=70)
-                        if st.form_submit_button("Registrar Cobro/Tratamiento"):
-                            if not notas.strip(): st.warning("⚠️ Guardando sin nota de evolución.")
-                            if metodo == "Garantía": abono = 0; saldo = 0; precio = 0 
-                            estatus = "Pagado" if saldo <= 0 else "Pendiente"; c = conn.cursor(); nota_final = formato_oracion(notas)
-                            c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, abono, saldo, get_fecha_mx(), costo_lab))
-                            if agendar: c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, estado_pago, categoria) VALUES (?,?,?,?,?,?,?,?,?,?)''', (int(time.time())+1, format_date_latino(f_cita), h_cita, id_p, nom_p, "Tratamiento", trat_sel, doc_name, "Pendiente", cat_sel))
-                            conn.commit(); st.success("Registrado"); time.sleep(1); st.rerun()
+                    c1, c2, c3 = st.columns(3); precio = c1.number_input("Precio", value=precio_sug, step=50.0); abono = c2.number_input("Abono", step=50.0); saldo = precio - abono; c3.metric("Saldo", f"${saldo:,.2f}")
+                    c4, c5, c6 = st.columns([1.5, 1, 1]); metodo = c4.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia", "Garantía", "Pendiente de Pago"]); num_sessions = c5.number_input("Sesiones", min_value=1, value=1); agendar = c6.checkbox("¿Agendar Cita?", key="chk_agendar")
+                    if agendar: 
+                        c7, c8 = st.columns(2); f_cita = c7.date_input("Fecha Cita", datetime.now(TZ_MX)); h_cita = c8.selectbox("Hora Cita", generar_slots_tiempo())
+                    else: f_cita = datetime.now(TZ_MX); h_cita = "00:00"
+                    notas = st.text_area("Notas Evolución", height=70)
+                    if st.button("Registrar Cobro/Tratamiento", type="primary"):
+                        if not notas.strip(): st.warning("⚠️ Guardando sin nota de evolución.")
+                        if metodo == "Garantía": abono = 0; saldo = 0; precio = 0 
+                        estatus = "Pagado" if saldo <= 0 else "Pendiente"; c = conn.cursor(); nota_final = formato_oracion(notas)
+                        c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, abono, saldo, get_fecha_mx(), costo_lab))
+                        if agendar: c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, estado_pago, categoria) VALUES (?,?,?,?,?,?,?,?,?,?)''', (int(time.time())+1, format_date_latino(f_cita), h_cita, id_p, nom_p, "Tratamiento", trat_sel, doc_name, "Pendiente", cat_sel))
+                        conn.commit(); st.success("Registrado"); time.sleep(1); st.rerun()
 
             with tab_abono:
                  with st.container(border=True):
@@ -852,7 +863,7 @@ def vista_consultorio():
             st.divider()
             with st.container(border=True):
                 st.markdown("#### 📊 Historial de Movimientos")
-                # [FIX V40.0] SQL CON DOCTOR_ATENDIO PARA EL RECIBO
+                # [FIX V40.2] SQL CON DOCTOR_ATENDIO PARA EL RECIBO
                 df_f = pd.read_sql(f"SELECT rowid, fecha, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, metodo_pago FROM citas WHERE id_paciente='{id_p}' AND estado_pago != 'CANCELADO' AND (precio_final > 0 OR monto_pagado > 0) ORDER BY timestamp DESC", conn)
                 if not df_f.empty:
                     df_show = df_f[['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente', 'metodo_pago']].reset_index(drop=True); df_show.columns = ['FECHA', 'CONCEPTO', 'CARGO ($)', 'ABONO ($)', 'SALDO ($)', 'MÉTODO']; df_show.index = range(1, len(df_show) + 1); df_show.index.name = 'CVO'
