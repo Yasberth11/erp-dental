@@ -592,10 +592,10 @@ def vista_consultorio():
         with st.expander("🔍 BUSCAR CITAS", expanded=False):
             q_cita = st.text_input("Buscar cita por nombre:")
             if q_cita:
-                # [FIX V33.0] QUERY ROBUSTA CON FALLBACK PARA NOMBRE
+                # [FIX V35.0] QUERY ROBUSTA CON FALLBACK PARA NOMBRE
                 query = f"""
                     SELECT c.fecha, c.hora, c.tratamiento, c.doctor_atendio, c.nombre_paciente as nombre_prospecto,
-                           p.nombre, p.apellido_paterno, p.apellido_materno
+                           p.nombre, p.apellido_paterno, p.apellido_materno, c.duracion, c.estado_pago
                     FROM citas c
                     LEFT JOIN pacientes p ON c.id_paciente = p.id_paciente
                     WHERE c.nombre_paciente LIKE '%{formato_nombre_legal(q_cita)}%'
@@ -605,7 +605,7 @@ def vista_consultorio():
                 df = pd.read_sql(query, conn)
                 
                 if not df.empty:
-                    # [FIX V33.0] Lógica de nombre: Si existe p.nombre (Paciente) úsalo, sino usa nombre_prospecto (Agenda)
+                    # [FIX V35.0] Lógica de nombre con respaldo
                     df['NOMBRE DEL PACIENTE'] = df.apply(lambda x: f"{x['nombre']} {x['apellido_paterno']} {x['apellido_materno'] if x['apellido_materno'] else ''}".strip() if x['nombre'] else x['nombre_prospecto'], axis=1)
                     
                     df_show = df[['fecha', 'hora', 'NOMBRE DEL PACIENTE', 'tratamiento', 'doctor_atendio']].copy()
@@ -632,7 +632,6 @@ def vista_consultorio():
                         lista_pac = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist() if not pacientes_raw.empty else []
                         p_sel = st.selectbox("Paciente", ["Seleccionar..."] + lista_pac)
                         
-                        # [FIX V34.0] SELECTOR JERÁRQUICO
                         servicios = pd.read_sql("SELECT * FROM servicios", conn)
                         cats = servicios['categoria'].unique()
                         cat_sel = st.selectbox("Categoría", cats)
@@ -640,7 +639,6 @@ def vista_consultorio():
                         trats = servicios[servicios['categoria'] == cat_sel]['nombre_tratamiento'].unique()
                         trat_sel = st.selectbox("Tratamiento", trats)
                         
-                        # Obtener duración default
                         dur_default = 30
                         if trat_sel:
                             row_dur = servicios[servicios['nombre_tratamiento'] == trat_sel]
@@ -670,7 +668,7 @@ def vista_consultorio():
                     with st.form("cita_prospecto", clear_on_submit=True):
                         nombre_pros = st.text_input("Nombre"); tel_pros = st.text_input("Tel (10)", max_chars=10)
                         
-                        # [FIX V34.0] SELECTOR JERÁRQUICO TAMBIÉN PARA PROSPECTO
+                        # [FIX V35.0] OPTIMIZACIÓN DE FILTRADO PARA PROSPECTO
                         servicios_p = pd.read_sql("SELECT * FROM servicios", conn)
                         cats_p = servicios_p['categoria'].unique()
                         cat_sel_p = st.selectbox("Categoría", cats_p, key="cat_pros")
@@ -695,7 +693,6 @@ def vista_consultorio():
                             elif nombre_pros and len(tel_pros) == 10:
                                 id_temp = f"PROS-{int(time.time())}"; nom_final = formato_nombre_legal(nombre_pros)
                                 c = conn.cursor()
-                                # Guardar tratamiento real
                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, estado_pago, notas, precio_lista, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, fecha_pago, costo_laboratorio, categoria, duracion) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                          (int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, "Primera Vez", trat_sel_p, doc_pros, 0, 0, 0, "Pendiente", f"Tel: {tel_pros}", 0, 0, "No", 0, 0, "", "No", "", 0, cat_sel_p, duracion_cita_p))
                                 conn.commit(); st.success("Agendado"); time.sleep(1); st.rerun()
@@ -741,6 +738,7 @@ def vista_consultorio():
                 for _, r in df_dia.iterrows():
                     if r['estado_pago'] == 'CANCELADO': continue
                     h_inicio = r['hora']
+                    # [FIX V35.0] DURACION DEFAULT 30 SI ES NULL/0
                     try:
                         dur = int(r['duracion']) if r['duracion'] and r['duracion'] > 0 else 30
                     except: dur = 30
@@ -1110,6 +1108,7 @@ def vista_consultorio():
                             
                             testigos_dict = {'n1': t1_name, 'n2': t2_name, 'img_t1': img_t1, 'img_t2': img_t2}
                             
+                            # [V30.0] DATOS TUTOR PARA PDF
                             edad_actual, _ = calcular_edad_completa(p_obj['fecha_nacimiento'])
                             tutor_info = {'nombre': p_obj.get('tutor', ''), 'relacion': p_obj.get('parentesco_tutor', '')}
                             
