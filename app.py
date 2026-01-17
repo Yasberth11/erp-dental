@@ -73,36 +73,10 @@ def cargar_estilo_royal():
         <style>
         .stApp { background-color: #F4F6F6; }
         .royal-card { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid #D4AF37; margin-bottom: 20px; }
-        
-        /* HEADER FIJO MEJORADO - ALERTA AGRESIVA */
         .sticky-header { position: fixed; top: 0; left: 0; width: 100%; z-index: 99999; color: white; padding: 15px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.3); font-family: 'Helvetica Neue', sans-serif; transition: background-color 0.3s; }
-        
-        /* ALERTAS EN CUERPO DE PAGINA */
-        .alerta-medica { 
-            background-color: #FFEBEE; 
-            color: #D32F2F; 
-            padding: 20px; 
-            border-radius: 8px; 
-            border: 3px solid #D32F2F; 
-            font-weight: 900; 
-            font-size: 1.4em; 
-            text-align: center;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-            text-transform: uppercase;
-        }
-
-        /* ANIMACIÓN DE PARPADEO */
+        .alerta-medica { background-color: #FFEBEE; color: #D32F2F; padding: 20px; border-radius: 8px; border: 3px solid #D32F2F; font-weight: 900; font-size: 1.4em; text-align: center; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 15px; text-transform: uppercase; }
         .alerta-activa { animation: pulse-red 2s infinite; }
-        @keyframes pulse-red {
-            0% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(211, 47, 47, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0); }
-        }
-
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(211, 47, 47, 0); } 100% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0); } }
         h1, h2, h3, h4 { color: #002B5B !important; font-family: 'Helvetica Neue', sans-serif; }
         .stButton>button { background-color: #D4AF37; color: #002B5B; border: none; font-weight: bold; width: 100%; transition: all 0.3s; }
         .stButton>button:hover { background-color: #B5952F; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
@@ -127,12 +101,10 @@ def get_db_connection():
 def migrar_tablas():
     conn = get_db_connection()
     c = conn.cursor()
-    # MIGRACION V32.0: Columna duracion (minutos)
     try: c.execute(f"ALTER TABLE servicios ADD COLUMN duracion INTEGER")
     except: pass
     try: c.execute(f"ALTER TABLE citas ADD COLUMN duracion INTEGER")
     except: pass
-
     for col in ['parentesco_tutor', 'telefono_emergencia', 'antecedentes_medicos', 'ahf', 'app', 'apnp', 'sexo', 'domicilio', 'tutor', 'contacto_emergencia', 'ocupacion', 'estado_civil', 'motivo_consulta', 'exploracion_fisica', 'diagnostico']:
         try: c.execute(f"ALTER TABLE pacientes ADD COLUMN {col} TEXT")
         except: pass
@@ -145,7 +117,6 @@ def migrar_tablas():
     conn.close()
 
 def actualizar_duraciones():
-    """Actualiza la base de datos de servicios con tiempos estimados (Opción B)"""
     tiempos = {
         "Profilaxis (Limpieza Ultrasónica)": 30, "Aplicación de Flúor (Niños)": 30, "Sellador de Fosetas y Fisuras": 30,
         "Resina Simple (1 cara)": 45, "Resina Compuesta (2 o más caras)": 60, "Reconstrucción de Muñón": 60, "Curación Temporal (Cavit)": 30,
@@ -158,7 +129,6 @@ def actualizar_duraciones():
         "Pulpotomía": 60, "Corona Acero-Cromo": 60, "Garantía (Retoque/Reparación)": 30
     }
     conn = get_db_connection(); c = conn.cursor()
-    # Default 30 min para lo que no esté en lista
     c.execute("UPDATE servicios SET duracion = 30 WHERE duracion IS NULL")
     for nombre, mins in tiempos.items():
         c.execute("UPDATE servicios SET duracion = ? WHERE nombre_tratamiento = ?", (mins, nombre))
@@ -305,39 +275,30 @@ def generar_slots_tiempo():
 def get_regimenes_fiscales(): return ["605 - Sueldos y Salarios", "612 - PFAEP (Actividad Empresarial)", "626 - RESICO", "616 - Sin obligaciones fiscales", "601 - General de Ley Personas Morales"]
 def get_usos_cfdi(): return ["D01 - Honorarios médicos, dentales", "S01 - Sin efectos fiscales", "G03 - Gastos en general", "CP01 - Pagos"]
 
-# [MODIFICADO V32.0] Lógica de Disponibilidad por Intervalos
 def verificar_disponibilidad(fecha_str, hora_str, duracion_minutos=30):
     conn = get_db_connection(); c = conn.cursor()
-    # 1. Obtener todas las citas del día que NO estén canceladas
     c.execute("SELECT hora, duracion FROM citas WHERE fecha=? AND estado_pago != 'CANCELADO' AND (precio_final IS NULL OR precio_final = 0)", (fecha_str,))
     citas_dia = c.fetchall()
     conn.close()
     
-    # 2. Convertir hora solicitada a minutos desde 00:00
     try:
         req_start = datetime.strptime(hora_str, "%H:%M")
         req_end = req_start + timedelta(minutes=duracion_minutos)
-        
         req_start_min = req_start.hour * 60 + req_start.minute
         req_end_min = req_end.hour * 60 + req_end.minute
         
         for cit in citas_dia:
             h_inicio = cit['hora']
-            d_duracion = cit['duracion'] if cit['duracion'] else 30 # Default 30 si es viejo
-            
+            d_duracion = cit['duracion'] if cit['duracion'] else 30 
             c_start = datetime.strptime(h_inicio, "%H:%M")
             c_end = c_start + timedelta(minutes=d_duracion)
-            
             c_start_min = c_start.hour * 60 + c_start.minute
             c_end_min = c_end.hour * 60 + c_end.minute
             
-            # Checar colisión de intervalos: (StartA < EndB) and (EndA > StartB)
             if (req_start_min < c_end_min) and (req_end_min > c_start_min):
-                return True # Ocupado
-                
-        return False # Libre
-    except:
-        return True # Por seguridad ante error de parseo
+                return True 
+        return False 
+    except: return True 
 
 def calcular_rfc_10(nombre, paterno, materno, nacimiento):
     try:
@@ -626,9 +587,9 @@ def vista_consultorio():
         with st.expander("🔍 BUSCAR CITAS", expanded=False):
             q_cita = st.text_input("Buscar cita por nombre:")
             if q_cita:
-                # [FIX V31.0] QUERY LIMPIA (Solo agenda)
+                # [FIX V33.0] QUERY ROBUSTA CON FALLBACK PARA NOMBRE
                 query = f"""
-                    SELECT c.fecha, c.hora, c.tratamiento, c.doctor_atendio,
+                    SELECT c.fecha, c.hora, c.tratamiento, c.doctor_atendio, c.nombre_paciente as nombre_prospecto,
                            p.nombre, p.apellido_paterno, p.apellido_materno
                     FROM citas c
                     LEFT JOIN pacientes p ON c.id_paciente = p.id_paciente
@@ -639,7 +600,8 @@ def vista_consultorio():
                 df = pd.read_sql(query, conn)
                 
                 if not df.empty:
-                    df['NOMBRE DEL PACIENTE'] = df.apply(lambda x: f"{x['nombre']} {x['apellido_paterno']} {x['apellido_materno'] if x['apellido_materno'] else ''}".strip(), axis=1)
+                    # [FIX V33.0] Lógica de nombre: Si existe p.nombre (Paciente) úsalo, sino usa nombre_prospecto (Agenda)
+                    df['NOMBRE DEL PACIENTE'] = df.apply(lambda x: f"{x['nombre']} {x['apellido_paterno']} {x['apellido_materno'] if x['apellido_materno'] else ''}".strip() if x['nombre'] else x['nombre_prospecto'], axis=1)
                     
                     df_show = df[['fecha', 'hora', 'NOMBRE DEL PACIENTE', 'tratamiento', 'doctor_atendio']].copy()
                     df_show.columns = ['FECHA', 'HORA', 'NOMBRE DEL PACIENTE', 'TRATAMIENTO', 'DOCTOR']
@@ -665,12 +627,10 @@ def vista_consultorio():
                         lista_pac = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist() if not pacientes_raw.empty else []
                         p_sel = st.selectbox("Paciente", ["Seleccionar..."] + lista_pac)
                         
-                        # [FIX V32.0] Duración dinámica
                         servicios = pd.read_sql("SELECT nombre_tratamiento, duracion FROM servicios", conn)
                         lista_trats = servicios['nombre_tratamiento'].tolist()
                         m_sel = st.selectbox("Tratamiento Principal", lista_trats)
                         
-                        # Obtener duración default
                         dur_default = 30
                         if m_sel:
                             row_dur = servicios[servicios['nombre_tratamiento'] == m_sel]
@@ -684,7 +644,6 @@ def vista_consultorio():
                         urgencia = st.checkbox("🚨 Es Urgencia / Sobrecupo")
                         
                         if st.form_submit_button("Agendar"):
-                            # [FIX V32.0] Validación de intervalo
                             ocupado = verificar_disponibilidad(fecha_ver_str, h_sel, duracion_cita)
                             if ocupado and not urgencia: st.error(f"⚠️ Horario OCUPADO por cita en curso. Revise la agenda.")
                             elif p_sel != "Seleccionar...":
@@ -708,6 +667,7 @@ def vista_consultorio():
                             elif nombre_pros and len(tel_pros) == 10:
                                 id_temp = f"PROS-{int(time.time())}"; nom_final = formato_nombre_legal(nombre_pros)
                                 c = conn.cursor()
+                                # [FIX V33.0] FORZAR DURACION 30 EN INSERT
                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, estado_pago, notas, precio_lista, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, fecha_pago, costo_laboratorio, categoria, duracion) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                          (int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, "Primera Vez", formato_oracion(motivo_pros), doc_pros, 0, 0, 0, "Pendiente", f"Tel: {tel_pros}", 0, 0, "No", 0, 0, "", "No", "", 0, "Primera Vez", 30))
                                 conn.commit(); st.success("Agendado"); time.sleep(1); st.rerun()
@@ -748,22 +708,24 @@ def vista_consultorio():
                 slots = generar_slots_tiempo()
                 
                 # Mapa de ocupación
-                ocupacion_map = {} # slot -> info
+                ocupacion_map = {} 
                 
                 for _, r in df_dia.iterrows():
                     if r['estado_pago'] == 'CANCELADO': continue
                     h_inicio = r['hora']
-                    dur = r['duracion'] if r['duracion'] else 30
+                    # [FIX V33.0] SAFET CHECK DURACION (Evita crash si es None o 0)
+                    try:
+                        dur = int(r['duracion']) if r['duracion'] and r['duracion'] > 0 else 30
+                    except: dur = 30
                     
                     try:
                         start_dt = datetime.strptime(h_inicio, "%H:%M")
-                        # Marcar slots
                         for i in range(0, dur, 30):
                             bloque_time = start_dt + timedelta(minutes=i)
                             bloque_str = bloque_time.strftime("%H:%M")
                             if bloque_str not in ocupacion_map:
                                 if i == 0:
-                                    ocupacion_map[bloque_str] = {"tipo": "inicio", "data": r}
+                                    ocupacion_map[bloque_str] = {"tipo": "inicio", "data": r, "dur": dur}
                                 else:
                                     ocupacion_map[bloque_str] = {"tipo": "bloqueado", "parent": r['nombre_paciente']}
                     except: pass
@@ -774,7 +736,7 @@ def vista_consultorio():
                         if info["tipo"] == "inicio":
                             r = info["data"]
                             color = "#FF5722" if "PROS" in str(r['id_paciente']) else "#002B5B"
-                            st.markdown(f"""<div style="padding:10px; margin-bottom:5px; background-color:#fff; border-left:5px solid {color}; box-shadow:0 2px 4px rgba(0,0,0,0.05); border-radius:4px;"><b>{slot} | {r['nombre_paciente']}</b><br><span style="color:#666; font-size:0.9em;">{r['tratamiento']} ({r['duracion']} min)</span></div>""", unsafe_allow_html=True)
+                            st.markdown(f"""<div style="padding:10px; margin-bottom:5px; background-color:#fff; border-left:5px solid {color}; box-shadow:0 2px 4px rgba(0,0,0,0.05); border-radius:4px;"><b>{slot} | {r['nombre_paciente']}</b><br><span style="color:#666; font-size:0.9em;">{r['tratamiento']} ({info['dur']} min)</span></div>""", unsafe_allow_html=True)
                         else:
                             st.markdown(f"""<div style="padding:8px; border-bottom:1px solid #eee; background-color:#f0f0f0; color:#888; font-size:0.8em; margin-left: 20px;">⬇️ EN TRATAMIENTO ({info['parent']})</div>""", unsafe_allow_html=True)
                     else:
@@ -786,7 +748,6 @@ def vista_consultorio():
         with tab_b:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
-                # [FIX V25.0] SELECTOR ESTANDARIZADO
                 lista_busqueda = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 seleccion = st.selectbox("Seleccionar:", ["..."] + lista_busqueda)
                 if seleccion != "...":
@@ -822,7 +783,7 @@ def vista_consultorio():
                         if not hist_notas.empty:
                             df_notes = hist_notas[['fecha', 'tratamiento', 'notas']].copy()
                             df_notes.index = range(1, len(df_notes) + 1)
-                            df_notes.index.name = "CVO" # [FIX V31.0] NOMBRE CORTO
+                            df_notes.index.name = "CVO" 
                             df_notes.columns = ["FECHA", "TRATAMIENTO", "NOTAS"]
                             st.dataframe(
                                 df_notes,
@@ -839,14 +800,12 @@ def vista_consultorio():
         with tab_n:
             st.markdown("#### Formulario Alta (NOM-004)")
             with st.form("alta_paciente", clear_on_submit=True):
-                # DATOS PERSONALES
                 c1, c2, c3 = st.columns(3)
                 nombre = c1.text_input("Nombre(s)")
                 paterno = c2.text_input("A. Paterno")
                 materno = c3.text_input("A. Materno")
                 
                 c4, c5, c6 = st.columns(3)
-                # [FIX V27.2] FECHA: 1920-HOY (DINÁMICO), DEFAULT HOY
                 nacimiento = c4.date_input("Fecha de Nacimiento", min_value=datetime(1920,1,1), max_value=datetime.now(TZ_MX).date(), value=datetime.now(TZ_MX).date())
                 sexo = c5.selectbox("Sexo", ["Masculino", "Femenino"])
                 ocupacion = c6.selectbox("Ocupación", LISTA_OCUPACIONES)
@@ -858,7 +817,6 @@ def vista_consultorio():
                 estado_civil = ce3.selectbox("Estado Civil", ["Soltero", "Casado", "Divorciado", "Viudo", "Unión Libre"])
                 domicilio = st.text_input("Domicilio Completo")
 
-                # VALIDACION VISUAL DE MENORES
                 edad_calc = 0
                 if nacimiento:
                     hoy = datetime.now().date()
@@ -884,7 +842,6 @@ def vista_consultorio():
                 st.markdown("**Exploración y Diagnóstico (Dr)**")
                 exploracion = st.text_area("Exploración Física"); diagnostico = st.text_area("Diagnóstico Presuntivo")
                 
-                # [FIX V27.1] DATOS FISCALES CON HOMOCLAVE
                 rfc_final = "" 
                 regimen = ""
                 uso_cfdi = ""
@@ -965,6 +922,8 @@ def vista_consultorio():
         if not pacientes.empty:
             sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]
+            st.session_state.id_paciente_activo = id_p
+            
             st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
             df_f = pd.read_sql(f"SELECT * FROM citas WHERE id_paciente='{id_p}' AND estado_pago != 'CANCELADO' AND (precio_final > 0 OR monto_pagado > 0)", conn)
             if not df_f.empty:
@@ -1025,7 +984,9 @@ def vista_consultorio():
             sel = st.selectbox("Paciente:", ["..."]+df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             if sel != "...":
                 id_target = sel.split(" - ")[0]; p_obj = df_p[df_p['id_paciente'] == id_target].iloc[0]
+                st.session_state.id_paciente_activo = id_target
                 
+                tipo_doc = st.selectbox("Documento", ["Consentimiento Informado", "Aviso de Privacidad"])
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK" 
@@ -1033,7 +994,6 @@ def vista_consultorio():
                 img_t1 = None; img_t2 = None
                 
                 if "Consentimiento" in tipo_doc:
-                    # BUSCAR TRATAMIENTOS DE HOY
                     hoy_str = get_fecha_mx()
                     citas_hoy = pd.read_sql(f"SELECT * FROM citas WHERE id_paciente='{id_target}' AND fecha='{hoy_str}' AND (precio_final > 0 OR monto_pagado > 0)", conn)
                     
@@ -1042,7 +1002,6 @@ def vista_consultorio():
                         tratamiento_legal = ", ".join(lista_tratamientos)
                         riesgo_legal = ""
                         nivel_riesgo = "LOW_RISK" 
-                        
                         servicios = pd.read_sql("SELECT * FROM servicios", conn)
                         
                         for trat in lista_tratamientos:
@@ -1118,7 +1077,6 @@ def vista_consultorio():
                             doc_full = DOCS_INFO[doc_name_sel]['nombre']
                             cedula_full = DOCS_INFO[doc_name_sel]['cedula']
                             nombre_paciente_full = f"{p_obj['nombre']} {p_obj['apellido_paterno']} {p_obj.get('apellido_materno','')}"
-                            
                             testigos_dict = {'n1': t1_name, 'n2': t2_name, 'img_t1': img_t1, 'img_t2': img_t2}
                             
                             edad_actual, _ = calcular_edad_completa(p_obj['fecha_nacimiento'])
@@ -1128,7 +1086,6 @@ def vista_consultorio():
                             
                             prefix = "CONSENTIMIENTO" if "Consentimiento" in tipo_doc else "AVISO_PRIVACIDAD"
                             clean_filename = f"{prefix}_{formato_nombre_legal(p_obj['nombre'])}_{formato_nombre_legal(p_obj['apellido_paterno'])}.pdf".replace(" ", "_")
-                            
                             st.download_button("Descargar PDF Firmado", pdf_bytes, clean_filename, "application/pdf")
                 else:
                     st.warning("⚠️ No se genera documento legal para este concepto.")
