@@ -671,7 +671,13 @@ def vista_consultorio():
                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, monto_pagado, saldo_pendiente, estado_pago, precio_lista, precio_final, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, notas, fecha_pago, costo_laboratorio, categoria, duracion) 
                                                                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                         (int(time.time()), fecha_ver_str, h_sel_r, id_p, nom_p, "General", trat_sel_r, d_sel_r, 0, 0, "Pendiente", 0, 0, 0, "No", 0, 0, "", "No", nota_final, "", 0, cat_sel_r, duracion_cita_r))
-                                conn.commit(); st.success(f"Agendado"); time.sleep(1); st.rerun()
+                                conn.commit()
+                                st.success(f"Agendado"); 
+                                # [FIX V36.1] AUTO-CLEAR MANUAL
+                                keys_borrar = ['dur_reg', 'hora_reg', 'doc_reg', 'urg_reg']
+                                for k in keys_borrar:
+                                    if k in st.session_state: del st.session_state[k]
+                                time.sleep(1); st.rerun()
                             else: st.error("Seleccione paciente")
 
                 # --- PESTAÑA PROSPECTO ---
@@ -711,7 +717,13 @@ def vista_consultorio():
                                 c = conn.cursor()
                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, estado_pago, notas, precio_lista, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, fecha_pago, costo_laboratorio, categoria, duracion) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                         (int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, "Primera Vez", trat_sel_p, doc_pros, 0, 0, 0, "Pendiente", f"Tel: {tel_pros}", 0, 0, "No", 0, 0, "", "No", "", 0, cat_sel_p, duracion_cita_p))
-                                conn.commit(); st.success("Agendado"); time.sleep(1); st.rerun()
+                                conn.commit() 
+                                st.success("Agendado"); 
+                                # [FIX V36.1] AUTO-CLEAR MANUAL
+                                keys_borrar_p = ['nom_pros', 'tel_pros', 'dur_pros_inp', 'hora_pros', 'doc_pros', 'urg_pros']
+                                for k in keys_borrar_p:
+                                    if k in st.session_state: del st.session_state[k]
+                                time.sleep(1); st.rerun()
                             else: st.error("Datos incompletos")
             
             st.markdown("### 🔄 Modificar Agenda")
