@@ -304,7 +304,6 @@ def procesar_firma_digital(firma_img_data):
         return temp_filename
     except: return None
 
-# [MODIFICADO V27.0] Soporte para múltiples tratamientos
 def crear_pdf_consentimiento(paciente_full, nombre_doctor, cedula_doctor, tipo_doc, tratamientos_str, riesgos_str, firma_pac, firma_doc, testigos_data, nivel_riesgo):
     pdf = PDFGenerator(); pdf.add_page()
     fecha_hoy = get_fecha_mx()
@@ -610,6 +609,7 @@ def vista_consultorio():
         with tab_b:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
+                # [FIX V25.0] SELECTOR ESTANDARIZADO
                 lista_busqueda = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 seleccion = st.selectbox("Seleccionar:", ["..."] + lista_busqueda)
                 if seleccion != "...":
@@ -627,6 +627,7 @@ def vista_consultorio():
                             st.download_button("📥 Bajar PDF", pdf_bytes, clean_name, "application/pdf")
                     with c_hist:
                         st.markdown("#### 📜 Notas")
+                        # [FIX V25.1] TABLA NOTAS: CONSECUTIVO Y ANCHO
                         if not hist_notas.empty:
                             df_notes = hist_notas[['fecha', 'tratamiento', 'notas']].copy()
                             df_notes.index = range(1, len(df_notes) + 1)
@@ -635,7 +636,7 @@ def vista_consultorio():
                             st.dataframe(
                                 df_notes,
                                 use_container_width=True,
-                                hide_index=False,
+                                hide_index=False, # Mostrar índice (consecutivo)
                                 column_config={
                                     "CONSECUTIVO": st.column_config.NumberColumn("CONSECUTIVO", width="small"),
                                     "NOTAS": st.column_config.TextColumn("NOTAS", width="large")
@@ -690,19 +691,21 @@ def vista_consultorio():
                 st.markdown("**Exploración y Diagnóstico (Dr)**")
                 exploracion = st.text_area("Exploración Física"); diagnostico = st.text_area("Diagnóstico Presuntivo")
                 
-                # [FIX V27.0] DATOS FISCALES CON EXPANDER (EVITA RECARGA)
+                # [FIX V27.1] DATOS FISCALES CON EXPANDER Y CAMPO HOMOCLAVE
                 rfc_final = "" 
                 regimen = ""
                 uso_cfdi = ""
                 cp = ""
                 
                 with st.expander("Datos de Facturación (Opcional)", expanded=False):
-                    cf1, cf2 = st.columns(2)
-                    rfc_base = cf1.text_input("RFC", max_chars=13)
-                    cp = cf2.text_input("C.P.", max_chars=5)
-                    cf3, cf4 = st.columns(2)
-                    regimen = cf3.selectbox("Régimen", get_regimenes_fiscales())
-                    uso_cfdi = cf4.selectbox("Uso CFDI", get_usos_cfdi())
+                    cf1, cf2, cf3 = st.columns([2, 1, 2])
+                    rfc_input = cf1.text_input("RFC (10 Caracteres)", max_chars=10, help="Dejar vacío para cálculo automático")
+                    homoclave_input = cf2.text_input("Homoclave", max_chars=3)
+                    cp = cf3.text_input("C.P.", max_chars=5)
+                    
+                    cf4, cf5 = st.columns(2)
+                    regimen = cf4.selectbox("Régimen", get_regimenes_fiscales())
+                    uso_cfdi = cf5.selectbox("Uso CFDI", get_usos_cfdi())
                     
                 aviso = st.checkbox("Acepto Aviso de Privacidad")
                 
@@ -717,8 +720,15 @@ def vista_consultorio():
                         if not tutor or not parentesco:
                             st.error("⛔ ERROR: Para menores de 18 años, el Nombre del Tutor y Parentesco son OBLIGATORIOS."); st.stop()
 
-                    if rfc_base: rfc_final = formato_nombre_legal(rfc_base)
-                    else: rfc_final = calcular_rfc_10(nombre, paterno, materno, nacimiento) + "XXX"
+                    # [FIX V27.1] Lógica de RFC + Homoclave
+                    rfc_parte_1 = ""
+                    if rfc_input: 
+                        rfc_parte_1 = formato_nombre_legal(rfc_input)
+                    else: 
+                        rfc_parte_1 = calcular_rfc_10(nombre, paterno, materno, nacimiento)
+                    
+                    rfc_parte_2 = formato_nombre_legal(homoclave_input) if homoclave_input else "XXX"
+                    rfc_final = rfc_parte_1 + rfc_parte_2
                     
                     nuevo_id = generar_id_unico(nombre, paterno, nacimiento)
                     c = conn.cursor()
@@ -729,6 +739,7 @@ def vista_consultorio():
         with tab_e:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
+                # [FIX V25.0] SELECTOR ESTANDARIZADO
                 lista_edit = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 sel_edit = st.selectbox("Buscar Paciente:", ["Select..."] + lista_edit)
                 if sel_edit != "Select...":
@@ -763,6 +774,7 @@ def vista_consultorio():
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         if not pacientes.empty:
+            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]
             st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
@@ -773,6 +785,7 @@ def vista_consultorio():
                 if deuda > 0: c2.error("PENDIENTE") 
                 else: c2.success("AL CORRIENTE")
                 
+                # [FIX V25.1] TABLA FINANZAS: MAYÚSCULAS Y CONSECUTIVO CENTRADO
                 df_show = df_f[['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente']].reset_index(drop=True)
                 df_show.index = df_show.index + 1
                 df_show.index.name = 'CONSECUTIVO'
@@ -808,6 +821,7 @@ def vista_consultorio():
                     else:
                         estatus = "Pagado" if saldo <= 0 else "Pendiente"
                         c = conn.cursor()
+                        # [FIX V25.2] LIMPIEZA DE NOTAS (DB FIX)
                         nota_final = formato_oracion(notas)
                         c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                  (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, abono, saldo, get_fecha_mx(), costo_lab))
@@ -819,12 +833,13 @@ def vista_consultorio():
     elif menu == "4. Documentos & Firmas":
         st.title("⚖️ Centro Legal"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
         if not df_p.empty:
+            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", ["..."]+df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             if sel != "...":
                 id_target = sel.split(" - ")[0]; p_obj = df_p[df_p['id_paciente'] == id_target].iloc[0]
                 tipo_doc = st.selectbox("Documento", ["Consentimiento Informado", "Aviso de Privacidad"])
                 
-                # VARIABLES DE ESTADO
+                # [FIX V25.0] VARIABLES DE TESTIGOS SIEMPRE INICIALIZADAS (EVITA CRASH)
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK" 
