@@ -338,6 +338,9 @@ AUTORIZACIÓN: Autorizo la anestesia local y procedimientos necesarios, asumiend
     
     pdf.set_font('Arial', 'B', 8)
     pdf.text(20, y_firmas + 40, "FIRMA DEL PACIENTE")
+    # [FIX V24.1] NOMBRE DEL PACIENTE BAJO LA FIRMA
+    pdf.text(20, y_firmas + 45, paciente_full) 
+    
     if firma_pac:
         f_path = procesar_firma_digital(firma_pac)
         if f_path: pdf.image(f_path, x=20, y=y_firmas, w=45, h=30); os.remove(f_path)
@@ -542,6 +545,7 @@ def vista_consultorio():
         with tab_b:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
+                # [FIX V24.1] Estandarización de selector
                 lista_busqueda = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 seleccion = st.selectbox("Seleccionar:", ["..."] + lista_busqueda)
                 if seleccion != "...":
@@ -601,6 +605,7 @@ def vista_consultorio():
         with tab_e:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
+                # [FIX V24.1] Estandarización de selector
                 lista_edit = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 sel_edit = st.selectbox("Buscar Paciente:", ["Select..."] + lista_edit)
                 if sel_edit != "Select...":
@@ -631,7 +636,7 @@ def vista_consultorio():
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         if not pacientes.empty:
-            # FIX: Selector con ID - NOMBRE - APELLIDO (Standard)
+            # [FIX V24.1] Estandarización de selector
             sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]
             st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
@@ -642,7 +647,7 @@ def vista_consultorio():
                 if deuda > 0: c2.error("PENDIENTE") 
                 else: c2.success("AL CORRIENTE")
                 
-                # FIX: Formato de Tabla (Columnas y Consecutivo)
+                # [FIX V24.1] Formato de Tabla (Columnas y Consecutivo)
                 df_show = df_f[['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente']].reset_index(drop=True)
                 df_show.index = df_show.index + 1
                 df_show.columns = ['FECHA', 'TRATAMIENTO', 'PRECIO FINAL', 'MONTO PAGADO', 'SALDO PENDIENTE']
@@ -683,12 +688,13 @@ def vista_consultorio():
     elif menu == "4. Documentos & Firmas":
         st.title("⚖️ Centro Legal"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
         if not df_p.empty:
+            # [FIX V24.1] Estandarización de selector
             sel = st.selectbox("Paciente:", ["..."]+df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             if sel != "...":
                 id_target = sel.split(" - ")[0]; p_obj = df_p[df_p['id_paciente'] == id_target].iloc[0]
                 tipo_doc = st.selectbox("Documento", ["Consentimiento Informado", "Aviso de Privacidad"])
                 
-                # [FIX V24.0] Inicialización PREVIA de variables para evitar UnboundLocalError en 'Aviso'
+                # [FIX V24.1] Inicialización ROBUSTA de variables para evitar UnboundLocalError
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK" 
