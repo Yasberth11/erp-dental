@@ -21,16 +21,15 @@ import os
 st.set_page_config(page_title="Royal Dental Manager", page_icon="🦷", layout="wide", initial_sidebar_state="expanded")
 TZ_MX = pytz.timezone('America/Mexico_City')
 LOGO_FILE = "logo.png"
-# [ACTUALIZACIÓN V23.1] Dirección corregida
 DIRECCION_CONSULTORIO = "CALLE EL CHILAR S/N, SAN MATEO XOLOC, TEPOTZOTLÁN, ESTADO DE MÉXICO"
 
-# CONSTANTES DOCTORES (Nombres Completos Sanitizados)
+# CONSTANTES DOCTORES
 DOCS_INFO = {
     "Dr. Emmanuel": {"nombre": "Dr. Emmanuel Tlacaelel Lopez Bermejo", "cedula": "12345678"},
     "Dra. Mónica": {"nombre": "Dra. Monica Montserrat Rodriguez Alvarez", "cedula": "87654321"}
 }
 
-# TEXTOS JURÍDICOS (LFPDPPP/NOM)
+# TEXTOS JURÍDICOS
 CLAUSULA_CIERRE = "Adicionalmente, entiendo que pueden presentarse eventos imprevisibles en cualquier acto médico, tales como: reacciones alérgicas a los anestésicos o materiales (incluso si no tengo antecedentes conocidos), síncope (desmayo), trismus (dificultad para abrir la boca), hematomas, o infecciones secundarias. Acepto que el éxito del tratamiento depende también de mi biología y de seguir estrictamente las indicaciones post-operatorias."
 TXT_DATOS_SENSIBLES = "DATOS PERSONALES SENSIBLES: Además de los datos de identificación, y para cumplir con la Normatividad Sanitaria (NOM-004-SSA3-2012 y NOM-013-SSA2-2015), recabamos: Estado de salud presente, pasado y futuro; Antecedentes Heredo-Familiares y Patológicos; Historial Farmacológico y Alergias; Hábitos de vida (tabaquismo/alcoholismo); e Imágenes diagnósticas/Biometría."
 TXT_CONSENTIMIENTO_EXPRESO = "CONSENTIMIENTO EXPRESO: De conformidad con el artículo 9 de la LFPDPPP, otorgo mi consentimiento expreso para el tratamiento de mis datos sensibles. Reconozco que la firma digital en este documento tiene plena validez legal, equiparándose a mi firma autógrafa."
@@ -632,7 +631,8 @@ def vista_consultorio():
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         if not pacientes.empty:
-            sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']}", axis=1).tolist())
+            # FIX: Selector con ID - NOMBRE - APELLIDO (Standard)
+            sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]
             st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
             df_f = pd.read_sql(f"SELECT * FROM citas WHERE id_paciente='{id_p}' AND estado_pago != 'CANCELADO' AND (precio_final > 0 OR monto_pagado > 0)", conn)
@@ -641,7 +641,14 @@ def vista_consultorio():
                 c1, c2 = st.columns(2); c1.metric("Deuda", f"${deuda:,.2f}")
                 if deuda > 0: c2.error("PENDIENTE") 
                 else: c2.success("AL CORRIENTE")
-                st.dataframe(df_f[['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente']])
+                
+                # FIX: Formato de Tabla (Columnas y Consecutivo)
+                df_show = df_f[['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente']].reset_index(drop=True)
+                df_show.index = df_show.index + 1
+                df_show.columns = ['FECHA', 'TRATAMIENTO', 'PRECIO FINAL', 'MONTO PAGADO', 'SALDO PENDIENTE']
+                df_show.index.name = 'CONSECUTIVO'
+                st.dataframe(df_show, use_container_width=True)
+                
             st.markdown("---"); st.subheader("Nuevo Plan")
             c1, c2 = st.columns(2)
             if not servicios.empty:
@@ -681,9 +688,12 @@ def vista_consultorio():
                 id_target = sel.split(" - ")[0]; p_obj = df_p[df_p['id_paciente'] == id_target].iloc[0]
                 tipo_doc = st.selectbox("Documento", ["Consentimiento Informado", "Aviso de Privacidad"])
                 
+                # [FIX V24.0] Inicialización PREVIA de variables para evitar UnboundLocalError en 'Aviso'
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK" 
+                t1_name = ""; t2_name = ""
+                img_t1 = None; img_t2 = None
                 
                 if "Consentimiento" in tipo_doc:
                     servicios = pd.read_sql("SELECT * FROM servicios", conn)
@@ -729,8 +739,6 @@ def vista_consultorio():
                             with c_t2:
                                 t2_name = st.text_input("Nombre Testigo 2")
                                 canvas_t2 = st_canvas(stroke_width=2, height=150, width=300, drawing_mode="freedraw", key="firma_testigo2")
-                        else:
-                            t1_name = ""; t2_name = ""
 
                     if st.button("Generar PDF Legal"):
                         bloqueo = False
@@ -741,7 +749,7 @@ def vista_consultorio():
                                 st.error("⛔ ERROR: Faltan firmas de testigos."); bloqueo = True
 
                         if not bloqueo:
-                            img_pac = None; img_doc = None; img_t1 = None; img_t2 = None
+                            img_pac = None; img_doc = None
                             
                             if canvas_pac.image_data is not None:
                                 if not np.all(canvas_pac.image_data[:,:,3] == 0):
@@ -768,7 +776,6 @@ def vista_consultorio():
                             
                             pdf_bytes = crear_pdf_consentimiento(nombre_paciente_full, doc_full, cedula_full, tipo_doc, tratamiento_legal, riesgo_legal, img_pac, img_doc, testigos_dict, nivel_riesgo)
                             
-                            # [ACTUALIZACIÓN V23.1] Nomenclatura de Archivo
                             prefix = "CONSENTIMIENTO" if "Consentimiento" in tipo_doc else "AVISO_PRIVACIDAD"
                             clean_filename = f"{prefix}_{sanitizar(p_obj['nombre'])}_{sanitizar(p_obj['apellido_paterno'])}.pdf".replace(" ", "_")
                             
