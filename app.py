@@ -654,7 +654,7 @@ def vista_consultorio():
                 materno = c3.text_input("A. Materno")
                 
                 c4, c5, c6 = st.columns(3)
-                # [FIX V27.2] FECHA: 1920-HOY (DINÁMICO), DEFAULT HOY
+                # [FIX V29.0] FECHA DEFAULT HOY (Evita error 0 años) y EMOJI REMOVIDO
                 nacimiento = c4.date_input("Fecha de Nacimiento", min_value=datetime(1920,1,1), max_value=datetime.now(TZ_MX).date(), value=datetime.now(TZ_MX).date())
                 sexo = c5.selectbox("Sexo", ["Masculino", "Femenino"])
                 ocupacion = c6.selectbox("Ocupación", LISTA_OCUPACIONES)
@@ -666,14 +666,15 @@ def vista_consultorio():
                 estado_civil = ce3.selectbox("Estado Civil", ["Soltero", "Casado", "Divorciado", "Viudo", "Unión Libre"])
                 domicilio = st.text_input("Domicilio Completo")
 
-                # VALIDACION VISUAL DE MENORES
+                # [FIX V29.0] CÁLCULO DE EDAD ROBUSTO Y SIN EMOJI
                 edad_calc = 0
                 if nacimiento:
-                    hoy = datetime.now().date()
-                    edad_calc = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
+                    hoy = datetime.now(TZ_MX).date()
+                    nac_date = nacimiento
+                    edad_calc = hoy.year - nac_date.year - ((hoy.month, hoy.day) < (nac_date.month, nac_date.day))
                 
                 if edad_calc < 18:
-                    st.info(f"👶 Paciente menor de edad ({edad_calc} años). Tutor obligatorio.")
+                    st.info(f"Paciente menor de edad ({edad_calc} años). Tutor obligatorio.")
                 
                 st.markdown("**Responsable / Tutor (Obligatorio si es menor)**")
                 ct1, ct2 = st.columns(2)
@@ -718,9 +719,10 @@ def vista_consultorio():
                         st.error("Teléfono Emergencia incorrecto"); st.stop()
                     if not nombre or not paterno: st.error("Nombre incompleto"); st.stop()
                     
+                    # [FIX V29.0] HARD STOP MENORES
                     if edad_calc < 18:
                         if not tutor or not parentesco:
-                            st.error("⛔ ERROR: Para menores de 18 años, el Nombre del Tutor y Parentesco son OBLIGATORIOS."); st.stop()
+                            st.error("⛔ ERROR: El paciente es menor de edad. El campo 'Nombre Tutor' es obligatorio."); st.stop()
 
                     # [FIX V27.1] LOGICA HIBRIDA RFC
                     if rfc_base:
@@ -741,6 +743,7 @@ def vista_consultorio():
         with tab_e:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
+                # [FIX V25.0] SELECTOR ESTANDARIZADO
                 lista_edit = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 sel_edit = st.selectbox("Buscar Paciente:", ["Select..."] + lista_edit)
                 if sel_edit != "Select...":
@@ -775,6 +778,7 @@ def vista_consultorio():
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         if not pacientes.empty:
+            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]
             st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
@@ -820,6 +824,7 @@ def vista_consultorio():
                     else:
                         estatus = "Pagado" if saldo <= 0 else "Pendiente"
                         c = conn.cursor()
+                        # [FIX V25.2] LIMPIEZA DE NOTAS (DB FIX)
                         nota_final = formato_oracion(notas)
                         c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                  (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, abono, saldo, get_fecha_mx(), costo_lab))
@@ -831,11 +836,13 @@ def vista_consultorio():
     elif menu == "4. Documentos & Firmas":
         st.title("⚖️ Centro Legal"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
         if not df_p.empty:
+            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", ["..."]+df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             if sel != "...":
                 id_target = sel.split(" - ")[0]; p_obj = df_p[df_p['id_paciente'] == id_target].iloc[0]
                 tipo_doc = st.selectbox("Documento", ["Consentimiento Informado", "Aviso de Privacidad"])
                 
+                # [FIX V25.0] VARIABLES DE TESTIGOS SIEMPRE INICIALIZADAS (EVITA CRASH)
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK" 
