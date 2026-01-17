@@ -575,8 +575,33 @@ def vista_consultorio():
         with st.expander("🔍 BUSCAR CITAS", expanded=False):
             q_cita = st.text_input("Buscar cita por nombre:")
             if q_cita:
-                df = pd.read_sql(f"SELECT fecha, hora, nombre_paciente, tratamiento, doctor_atendio, estado_pago FROM citas WHERE nombre_paciente LIKE '%{formato_nombre_legal(q_cita)}%' ORDER BY timestamp DESC", conn)
-                st.dataframe(df)
+                # [FIX V31.0] QUERY LIMPIA (Solo agenda)
+                query = f"""
+                    SELECT c.fecha, c.hora, c.tratamiento, c.doctor_atendio,
+                           p.nombre, p.apellido_paterno, p.apellido_materno
+                    FROM citas c
+                    LEFT JOIN pacientes p ON c.id_paciente = p.id_paciente
+                    WHERE c.nombre_paciente LIKE '%{formato_nombre_legal(q_cita)}%'
+                    AND (c.precio_final IS NULL OR c.precio_final = 0)
+                    ORDER BY c.timestamp DESC
+                """
+                df = pd.read_sql(query, conn)
+                
+                # Construir Nombre Completo
+                if not df.empty:
+                    df['NOMBRE DEL PACIENTE'] = df.apply(lambda x: f"{x['nombre']} {x['apellido_paterno']} {x['apellido_materno'] if x['apellido_materno'] else ''}".strip(), axis=1)
+                    
+                    # Seleccionar y Renombrar
+                    df_show = df[['fecha', 'hora', 'NOMBRE DEL PACIENTE', 'tratamiento', 'doctor_atendio']].copy()
+                    df_show.columns = ['FECHA', 'HORA', 'NOMBRE DEL PACIENTE', 'TRATAMIENTO', 'DOCTOR']
+                    
+                    # Consecutivo
+                    df_show.index = range(1, len(df_show) + 1)
+                    df_show.index.name = 'CVO'
+                    
+                    st.dataframe(df_show, use_container_width=True)
+                else:
+                    st.info("No se encontraron citas.")
 
         col_cal1, col_cal2 = st.columns([1, 2.5])
         with col_cal1:
@@ -679,7 +704,6 @@ def vista_consultorio():
                     
                     edad, tipo_pac = calcular_edad_completa(p_data.get('fecha_nacimiento', ''))
                     
-                    # [MODIFICADO] VISUALIZACIÓN DE ALERTA EN CUERPO
                     antecedentes = str(p_data.get('app', '')).strip()
                     if antecedentes and len(antecedentes) > 2 and "NEGADO" not in antecedentes.upper():
                         st.markdown(f"""
@@ -692,13 +716,10 @@ def vista_consultorio():
                     c_info, c_hist = st.columns([1, 2])
                     with c_info:
                         st.markdown(f"""<div class="royal-card"><h3>👤 {p_data['nombre']} {p_data['apellido_paterno']}</h3><b>Edad:</b> {edad} Años<br><b>Tel:</b> {format_tel_visual(p_data['telefono'])}<br><b>RFC:</b> {p_data.get('rfc', 'N/A')}</div>""", unsafe_allow_html=True)
-                        # [FIX V30.1] LOGICA ANTI-FUTURO
+                        
                         hoy = datetime.now(TZ_MX).date()
-                        # Convertir fechas a objetos datetime para filtrar
-                        # Nota: Pandas infiere el formato, pero forzamos coerce para evitar crash
                         df_raw_notas = pd.read_sql(f"SELECT fecha, tratamiento, notas FROM citas WHERE id_paciente='{id_sel_str}' ORDER BY timestamp DESC", conn)
                         df_raw_notas['fecha_dt'] = pd.to_datetime(df_raw_notas['fecha'], format="%d/%m/%Y", errors='coerce').dt.date
-                        # Filtrar: Solo mostrar registros <= Hoy
                         hist_notas = df_raw_notas[df_raw_notas['fecha_dt'] <= hoy].drop(columns=['fecha_dt'])
                         
                         if st.button("🖨️ Descargar Historia (PDF)"):
@@ -710,14 +731,14 @@ def vista_consultorio():
                         if not hist_notas.empty:
                             df_notes = hist_notas[['fecha', 'tratamiento', 'notas']].copy()
                             df_notes.index = range(1, len(df_notes) + 1)
-                            df_notes.index.name = "CONSECUTIVO"
+                            df_notes.index.name = "CVO" # [FIX V31.0] NOMBRE CORTO
                             df_notes.columns = ["FECHA", "TRATAMIENTO", "NOTAS"]
                             st.dataframe(
                                 df_notes,
                                 use_container_width=True,
                                 hide_index=False,
                                 column_config={
-                                    "CONSECUTIVO": st.column_config.NumberColumn("CONSECUTIVO", width="small"),
+                                    "CVO": st.column_config.NumberColumn("CVO", width="small"),
                                     "NOTAS": st.column_config.TextColumn("NOTAS", width="large")
                                 }
                             )
@@ -727,14 +748,12 @@ def vista_consultorio():
         with tab_n:
             st.markdown("#### Formulario Alta (NOM-004)")
             with st.form("alta_paciente", clear_on_submit=True):
-                # DATOS PERSONALES
                 c1, c2, c3 = st.columns(3)
                 nombre = c1.text_input("Nombre(s)")
                 paterno = c2.text_input("A. Paterno")
                 materno = c3.text_input("A. Materno")
                 
                 c4, c5, c6 = st.columns(3)
-                # [FIX V27.2] FECHA: 1920-HOY (DINÁMICO), DEFAULT HOY
                 nacimiento = c4.date_input("Fecha de Nacimiento", min_value=datetime(1920,1,1), max_value=datetime.now(TZ_MX).date(), value=datetime.now(TZ_MX).date())
                 sexo = c5.selectbox("Sexo", ["Masculino", "Femenino"])
                 ocupacion = c6.selectbox("Ocupación", LISTA_OCUPACIONES)
@@ -746,7 +765,6 @@ def vista_consultorio():
                 estado_civil = ce3.selectbox("Estado Civil", ["Soltero", "Casado", "Divorciado", "Viudo", "Unión Libre"])
                 domicilio = st.text_input("Domicilio Completo")
 
-                # VALIDACION VISUAL DE MENORES
                 edad_calc = 0
                 if nacimiento:
                     hoy = datetime.now().date()
@@ -765,7 +783,6 @@ def vista_consultorio():
                 contacto_emer_nom = cem1.text_input("Nombre Contacto Emergencia")
                 contacto_emer_tel = cem2.text_input("Tel Emergencia (10)", max_chars=10)
                 
-                # [FIX V28.0] REINTEGRACIÓN DEL CAMPO MOTIVO DE CONSULTA
                 motivo_consulta = st.text_area("Motivo de Consulta*")
 
                 st.markdown("**Historia Médica**")
@@ -773,7 +790,6 @@ def vista_consultorio():
                 st.markdown("**Exploración y Diagnóstico (Dr)**")
                 exploracion = st.text_area("Exploración Física"); diagnostico = st.text_area("Diagnóstico Presuntivo")
                 
-                # [FIX V27.1] DATOS FISCALES CON HOMOCLAVE
                 rfc_final = "" 
                 regimen = ""
                 uso_cfdi = ""
@@ -802,12 +818,9 @@ def vista_consultorio():
                         if not tutor or not parentesco:
                             st.error("⛔ ERROR: Para menores de 18 años, el Nombre del Tutor y Parentesco son OBLIGATORIOS."); st.stop()
 
-                    # [FIX V27.1] LOGICA HIBRIDA RFC
                     if rfc_base:
-                        # Manual: Concatenar lo que haya
                         rfc_final = formato_nombre_legal(rfc_base) + formato_nombre_legal(homoclave)
                     else:
-                        # Automático: Calcular Base + (Homoclave Manual o XXX)
                         base_10 = calcular_rfc_10(nombre, paterno, materno, nacimiento)
                         homo_sufijo = formato_nombre_legal(homoclave) if homoclave else "XXX"
                         rfc_final = base_10 + homo_sufijo
@@ -821,7 +834,6 @@ def vista_consultorio():
         with tab_e:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
-                # [FIX V25.0] SELECTOR ESTANDARIZADO
                 lista_edit = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 sel_edit = st.selectbox("Buscar Paciente:", ["Select..."] + lista_edit)
                 if sel_edit != "Select...":
@@ -856,11 +868,8 @@ def vista_consultorio():
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         if not pacientes.empty:
-            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]
-            
-            # [V30.0] ACTIVAR PACIENTE EN SESION
             st.session_state.id_paciente_activo = id_p
             
             st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
@@ -901,7 +910,6 @@ def vista_consultorio():
                 doc_name = st.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"]); metodo = st.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia", "Garantía", "Pendiente de Pago"])
                 notas = st.text_area("Notas Evolución"); agendar = st.checkbox("¿Agendar Cita?"); f_cita = st.date_input("Fecha"); h_cita = st.selectbox("Hora", generar_slots_tiempo())
                 if st.form_submit_button("Registrar"):
-                    # [V30.0] VALIDACION DE NOTA VACIA
                     if not notas.strip():
                          st.warning("⚠️ Guardando sin nota de evolución. Se recomienda documentar el procedimiento.")
                     
@@ -924,13 +932,9 @@ def vista_consultorio():
             sel = st.selectbox("Paciente:", ["..."]+df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             if sel != "...":
                 id_target = sel.split(" - ")[0]; p_obj = df_p[df_p['id_paciente'] == id_target].iloc[0]
-                
-                # [V30.0] ACTIVAR PACIENTE EN SESION
                 st.session_state.id_paciente_activo = id_target
                 
                 tipo_doc = st.selectbox("Documento", ["Consentimiento Informado", "Aviso de Privacidad"])
-                
-                # [FIX V24.1] Inicialización ROBUSTA de variables para evitar UnboundLocalError
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK" 
@@ -938,7 +942,6 @@ def vista_consultorio():
                 img_t1 = None; img_t2 = None
                 
                 if "Consentimiento" in tipo_doc:
-                    # BUSCAR TRATAMIENTOS DE HOY
                     hoy_str = get_fecha_mx()
                     citas_hoy = pd.read_sql(f"SELECT * FROM citas WHERE id_paciente='{id_target}' AND fecha='{hoy_str}' AND (precio_final > 0 OR monto_pagado > 0)", conn)
                     
@@ -947,7 +950,6 @@ def vista_consultorio():
                         tratamiento_legal = ", ".join(lista_tratamientos)
                         riesgo_legal = ""
                         nivel_riesgo = "LOW_RISK" 
-                        
                         servicios = pd.read_sql("SELECT * FROM servicios", conn)
                         
                         for trat in lista_tratamientos:
@@ -1023,10 +1025,8 @@ def vista_consultorio():
                             doc_full = DOCS_INFO[doc_name_sel]['nombre']
                             cedula_full = DOCS_INFO[doc_name_sel]['cedula']
                             nombre_paciente_full = f"{p_obj['nombre']} {p_obj['apellido_paterno']} {p_obj.get('apellido_materno','')}"
-                            
                             testigos_dict = {'n1': t1_name, 'n2': t2_name, 'img_t1': img_t1, 'img_t2': img_t2}
                             
-                            # [V30.0] DATOS TUTOR PARA PDF
                             edad_actual, _ = calcular_edad_completa(p_obj['fecha_nacimiento'])
                             tutor_info = {'nombre': p_obj.get('tutor', ''), 'relacion': p_obj.get('parentesco_tutor', '')}
                             
@@ -1034,7 +1034,6 @@ def vista_consultorio():
                             
                             prefix = "CONSENTIMIENTO" if "Consentimiento" in tipo_doc else "AVISO_PRIVACIDAD"
                             clean_filename = f"{prefix}_{formato_nombre_legal(p_obj['nombre'])}_{formato_nombre_legal(p_obj['apellido_paterno'])}.pdf".replace(" ", "_")
-                            
                             st.download_button("Descargar PDF Firmado", pdf_bytes, clean_filename, "application/pdf")
                 else:
                     st.warning("⚠️ No se genera documento legal para este concepto.")
