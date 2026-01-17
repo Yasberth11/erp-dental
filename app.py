@@ -338,7 +338,6 @@ AUTORIZACIÓN: Autorizo la anestesia local y procedimientos necesarios, asumiend
     
     pdf.set_font('Arial', 'B', 8)
     pdf.text(20, y_firmas + 40, "FIRMA DEL PACIENTE")
-    # [FIX V24.1] NOMBRE DEL PACIENTE BAJO LA FIRMA
     pdf.text(20, y_firmas + 45, paciente_full) 
     
     if firma_pac:
@@ -464,7 +463,6 @@ def vista_consultorio():
                 with tab_reg:
                     with st.form("cita_registrada", clear_on_submit=True):
                         pacientes_raw = pd.read_sql("SELECT id_paciente, nombre, apellido_paterno FROM pacientes", conn)
-                        # [FIX V25.0] SELECTOR ESTANDARIZADO
                         lista_pac = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist() if not pacientes_raw.empty else []
                         p_sel = st.selectbox("Paciente", ["Seleccionar..."] + lista_pac)
                         h_sel = st.selectbox("Hora", generar_slots_tiempo())
@@ -564,7 +562,7 @@ def vista_consultorio():
                             st.download_button("📥 Bajar PDF", pdf_bytes, clean_name, "application/pdf")
                     with c_hist:
                         st.markdown("#### 📜 Notas")
-                        # [FIX V25.0] TABLA NOTAS: CONSECUTIVO Y TEXTO LARGO
+                        # [FIX V25.1] TABLA NOTAS: CONSECUTIVO Y ANCHO
                         if not hist_notas.empty:
                             df_notes = hist_notas[['fecha', 'tratamiento', 'notas']].copy()
                             df_notes.index = range(1, len(df_notes) + 1)
@@ -573,7 +571,9 @@ def vista_consultorio():
                             st.dataframe(
                                 df_notes,
                                 use_container_width=True,
+                                hide_index=False, # Mostrar índice (consecutivo)
                                 column_config={
+                                    "CONSECUTIVO": st.column_config.NumberColumn("CONSECUTIVO", width="small"),
                                     "NOTAS": st.column_config.TextColumn("NOTAS", width="large")
                                 }
                             )
@@ -664,12 +664,18 @@ def vista_consultorio():
                 if deuda > 0: c2.error("PENDIENTE") 
                 else: c2.success("AL CORRIENTE")
                 
-                # [FIX V25.0] TABLA FINANZAS: MAYÚSCULAS Y CONSECUTIVO
+                # [FIX V25.1] TABLA FINANZAS: MAYÚSCULAS Y CONSECUTIVO CENTRADO
                 df_show = df_f[['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente']].reset_index(drop=True)
                 df_show.index = df_show.index + 1
-                df_show.columns = ['FECHA', 'TRATAMIENTO', 'PRECIO FINAL', 'MONTO PAGADO', 'SALDO PENDIENTE']
                 df_show.index.name = 'CONSECUTIVO'
-                st.dataframe(df_show, use_container_width=True)
+                df_show.columns = ['FECHA', 'TRATAMIENTO', 'PRECIO FINAL', 'MONTO PAGADO', 'SALDO PENDIENTE']
+                st.dataframe(
+                    df_show, 
+                    use_container_width=True,
+                    column_config={
+                        "CONSECUTIVO": st.column_config.NumberColumn("CONSECUTIVO", width="small")
+                    }
+                )
                 
             st.markdown("---"); st.subheader("Nuevo Plan")
             c1, c2 = st.columns(2)
