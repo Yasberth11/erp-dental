@@ -164,25 +164,38 @@ def seed_data():
 init_db(); migrar_tablas(); seed_data(); actualizar_niveles_riesgo()
 
 # ==========================================
-# 3. HELPERS Y FUNCIONES
+# 3. HELPERS Y FUNCIONES DE FORMATO
 # ==========================================
 def get_fecha_mx(): return datetime.now(TZ_MX).strftime("%d/%m/%Y")
 def get_hora_mx(): return datetime.now(TZ_MX).strftime("%H:%M:%S")
 def format_date_latino(date_obj): return date_obj.strftime("%d/%m/%Y")
 
-def sanitizar(texto):
+# [NUEVO] FORMATO PARA NOMBRES (MAYUSCULAS SIN ACENTOS)
+def formato_nombre_legal(texto):
     if not texto: return ""
     texto = str(texto).upper().strip()
+    # Mapeo completo de acentos
     for old, new in {'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U','Ü':'U','Ñ':'N'}.items(): 
         texto = texto.replace(old, new)
     return " ".join(texto.split())
+
+# [NUEVO] FORMATO PARA TEXTO GENERAL (DOMICILIO, OCUPACIÓN - ALTA Y BAJAS)
+def formato_titulo(texto):
+    if not texto: return ""
+    return str(texto).strip().title()
+
+# [NUEVO] FORMATO PARA NOTAS Y ANTECEDENTES (ORACIÓN)
+def formato_oracion(texto):
+    if not texto: return ""
+    txt = str(texto).strip()
+    return txt.capitalize()
 
 def limpiar_email(texto): return texto.lower().strip() if texto else ""
 
 def registrar_auditoria(usuario, accion, detalle):
     try:
         conn = get_db_connection(); c = conn.cursor()
-        c.execute("INSERT INTO auditoria (fecha_evento, usuario, accion, detalle) VALUES (?,?,?,?)", (datetime.now(TZ_MX).strftime("%Y-%m-%d %H:%M:%S"), usuario, accion, sanitizar(detalle)))
+        c.execute("INSERT INTO auditoria (fecha_evento, usuario, accion, detalle) VALUES (?,?,?,?)", (datetime.now(TZ_MX).strftime("%Y-%m-%d %H:%M:%S"), usuario, accion, formato_nombre_legal(detalle)))
         conn.commit(); conn.close()
     except: pass
 
@@ -220,7 +233,7 @@ def calcular_edad_completa(nacimiento_input):
 
 def generar_id_unico(nombre, paterno, nacimiento):
     try:
-        nombre = sanitizar(nombre); paterno = sanitizar(paterno)
+        nombre = formato_nombre_legal(nombre); paterno = formato_nombre_legal(paterno)
         part1 = paterno[:3] if len(paterno) >=3 else paterno + "X"; part2 = nombre[0]; part3 = str(nacimiento.year)
         random_chars = ''.join(random.choices(string.ascii_uppercase + string.digits, k=3))
         return f"{part1}{part2}-{part3}-{random_chars}"
@@ -244,7 +257,7 @@ def verificar_disponibilidad(fecha_str, hora_str):
 
 def calcular_rfc_10(nombre, paterno, materno, nacimiento):
     try:
-        nombre = sanitizar(nombre); paterno = sanitizar(paterno); materno = sanitizar(materno)
+        nombre = formato_nombre_legal(nombre); paterno = formato_nombre_legal(paterno); materno = formato_nombre_legal(materno)
         fecha = datetime.strptime(str(nacimiento), "%Y-%m-%d")
         letra1 = paterno[0]; vocales = [c for c in paterno[1:] if c in "AEIOU"]; letra2 = vocales[0] if vocales else "X"
         letra3 = materno[0] if materno else "X"
@@ -285,8 +298,9 @@ def procesar_firma_digital(firma_img_data):
 def crear_pdf_consentimiento(paciente_full, nombre_doctor, cedula_doctor, tipo_doc, tratamiento, riesgo_legal, firma_pac, firma_doc, testigos_data, nivel_riesgo):
     pdf = PDFGenerator(); pdf.add_page()
     fecha_hoy = get_fecha_mx()
-    paciente_full = sanitizar(paciente_full)
-    nombre_doctor = sanitizar(nombre_doctor)
+    # Asegurar nombre legal en PDF
+    paciente_full = formato_nombre_legal(paciente_full)
+    nombre_doctor = formato_nombre_legal(nombre_doctor)
     
     if "Aviso" in tipo_doc:
         pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, "AVISO DE PRIVACIDAD INTEGRAL PARA PACIENTES", 0, 1, 'C'); pdf.ln(5)
@@ -355,13 +369,13 @@ AUTORIZACIÓN: Autorizo la anestesia local y procedimientos necesarios, asumiend
         if nivel_riesgo == "HIGH_RISK":
             pdf.ln(50)
             y_testigos = pdf.get_y()
-            pdf.text(20, y_testigos + 40, f"TESTIGO 1: {sanitizar(testigos_data.get('n1',''))}")
+            pdf.text(20, y_testigos + 40, f"TESTIGO 1: {formato_nombre_legal(testigos_data.get('n1',''))}")
             if testigos_data.get('img_t1'):
                  f_path_t1 = procesar_firma_digital(testigos_data['img_t1'])
                  if f_path_t1: pdf.image(f_path_t1, x=20, y=y_testigos, w=45, h=30); os.remove(f_path_t1)
             else: pdf.line(20, y_testigos + 35, 70, y_testigos + 35)
 
-            pdf.text(110, y_testigos + 40, f"TESTIGO 2: {sanitizar(testigos_data.get('n2',''))}")
+            pdf.text(110, y_testigos + 40, f"TESTIGO 2: {formato_nombre_legal(testigos_data.get('n2',''))}")
             if testigos_data.get('img_t2'):
                  f_path_t2 = procesar_firma_digital(testigos_data['img_t2'])
                  if f_path_t2: pdf.image(f_path_t2, x=110, y=y_testigos, w=45, h=30); os.remove(f_path_t2)
@@ -371,7 +385,7 @@ AUTORIZACIÓN: Autorizo la anestesia local y procedimientos necesarios, asumiend
 
 def crear_pdf_historia(p, historial):
     pdf = PDFGenerator(); pdf.add_page()
-    nombre_p = sanitizar(f"{p['nombre']} {p['apellido_paterno']} {p.get('apellido_materno','')}")
+    nombre_p = formato_nombre_legal(f"{p['nombre']} {p['apellido_paterno']} {p.get('apellido_materno','')}")
     edad, _ = calcular_edad_completa(p.get('fecha_nacimiento', ''))
     
     pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, "HISTORIA CLÍNICA ODONTOLÓGICA (NOM-004-SSA3-2012)", 0, 1, 'C'); pdf.ln(5)
@@ -379,57 +393,49 @@ def crear_pdf_historia(p, historial):
     pdf.set_fill_color(230, 230, 230); pdf.set_font('Arial', 'B', 10)
     pdf.cell(0, 6, "I. FICHA DE IDENTIFICACIÓN", 1, 1, 'L', True)
     pdf.set_font('Arial', '', 9)
-    info = f"""Nombre: {nombre_p}\nEdad: {edad} | Sexo: {p.get('sexo','N/A')} | Nacimiento: {p.get('fecha_nacimiento','N/A')}\nOcupación: {sanitizar(p.get('ocupacion','N/A'))} | Estado Civil: {p.get('estado_civil','N/A')}\nDomicilio: {sanitizar(p.get('domicilio','N/A'))}\nTel: {p['telefono']} | Email: {p.get('email','N/A')}\nContacto Emergencia: {sanitizar(p.get('contacto_emergencia','N/A'))}\nTutor: {sanitizar(p.get('tutor','N/A'))}"""
+    info = f"""Nombre: {nombre_p}\nEdad: {edad} | Sexo: {p.get('sexo','N/A')} | Nacimiento: {p.get('fecha_nacimiento','N/A')}\nOcupación: {formato_titulo(p.get('ocupacion','N/A'))} | Estado Civil: {formato_titulo(p.get('estado_civil','N/A'))}\nDomicilio: {formato_titulo(p.get('domicilio','N/A'))}\nTel: {p['telefono']} | Email: {p.get('email','N/A')}\nContacto Emergencia: {formato_nombre_legal(p.get('contacto_emergencia','N/A'))}\nTutor: {formato_nombre_legal(p.get('tutor','N/A'))}"""
     pdf.multi_cell(0, 5, info, 1); pdf.ln(2)
     
     pdf.set_font('Arial', 'B', 10); pdf.cell(0, 6, "II. ANTECEDENTES (ANAMNESIS)", 1, 1, 'L', True)
     pdf.set_font('Arial', '', 9)
-    ant = f"""HEREDO-FAMILIARES (AHF): {sanitizar(p.get('ahf','Negados'))}\n\nPERSONALES PATOLÓGICOS (APP - Alergias/Enf): {sanitizar(p.get('app','Negados'))}\n\nNO PATOLÓGICOS (APNP): {sanitizar(p.get('apnp','Negados'))}"""
+    ant = f"""HEREDO-FAMILIARES (AHF): {formato_oracion(p.get('ahf','Negados'))}\n\nPERSONALES PATOLÓGICOS (APP - Alergias/Enf): {formato_oracion(p.get('app','Negados'))}\n\nNO PATOLÓGICOS (APNP): {formato_oracion(p.get('apnp','Negados'))}"""
     pdf.multi_cell(0, 5, ant, 1); pdf.ln(2)
     
     pdf.set_font('Arial', 'B', 10); pdf.cell(0, 6, "III. MOTIVO DE CONSULTA Y DIAGNÓSTICO", 1, 1, 'L', True)
     pdf.set_font('Arial', '', 9)
-    diag = f"""Motivo: {sanitizar(p.get('motivo_consulta','N/A'))}\n\nExploración Física: {sanitizar(p.get('exploracion_fisica','N/A'))}\n\nDiagnóstico: {sanitizar(p.get('diagnostico','N/A'))}"""
+    diag = f"""Motivo: {formato_oracion(p.get('motivo_consulta','N/A'))}\n\nExploración Física: {formato_oracion(p.get('exploracion_fisica','N/A'))}\n\nDiagnóstico: {formato_oracion(p.get('diagnostico','N/A'))}"""
     pdf.multi_cell(0, 5, diag, 1); pdf.ln(5)
     
     pdf.set_font('Arial', 'B', 10); pdf.cell(0, 6, "IV. NOTAS DE EVOLUCIÓN", 0, 1, 'L')
     
-    # [FIX V25.2] WORD WRAP FIX: TABLA CON ALTURA DINÁMICA
     if not historial.empty:
-        # Headers
         pdf.set_font('Arial', 'B', 8)
-        # Dibujamos headers manuales para consistencia
         x_start = pdf.get_x()
         pdf.cell(25, 6, "FECHA", 1, 0, 'C')
         pdf.cell(60, 6, "TRATAMIENTO", 1, 0, 'C')
-        pdf.cell(105, 6, "NOTAS / EVOLUCIÓN", 1, 1, 'C') # Salto de línea
+        pdf.cell(105, 6, "NOTAS / EVOLUCIÓN", 1, 1, 'C')
         
         pdf.set_font('Arial', '', 8)
         
         for _, row in historial.iterrows():
             txt_fecha = str(row['fecha'])
-            txt_trat = str(row['tratamiento'])[:45] # Limitar largo tratamiento visual
+            txt_trat = str(row['tratamiento'])[:45] 
             txt_nota = str(row['notas']) if row['notas'] else ""
+            txt_nota = formato_oracion(txt_nota) # Formato oración para notas
             
-            # 1. Calcular altura necesaria para la NOTA (columna más ancha y variable)
-            # FPDF MultiCell simulación para obtener altura
             x_curr = pdf.get_x()
             y_curr = pdf.get_y()
             
-            # Simulamos impresión de la nota para ver cuánto ocupa verticalmente
-            pdf.set_xy(x_curr + 85, y_curr) # Posición columna Notas (25+60 offset)
-            pdf.multi_cell(105, 5, txt_nota, 0, 'L') # Altura de línea 5
+            pdf.set_xy(x_curr + 85, y_curr) 
+            pdf.multi_cell(105, 5, txt_nota, 0, 'L') 
             y_end = pdf.get_y()
             h_row = y_end - y_curr
             
-            # Altura mínima de 6mm si el texto es muy corto
             if h_row < 6: h_row = 6
             
-            # 2. Verificar Salto de Página
             if y_curr + h_row > 270: 
                 pdf.add_page()
                 y_curr = pdf.get_y()
-                # Reimprimir headers en nueva página
                 pdf.set_font('Arial', 'B', 8)
                 pdf.cell(25, 6, "FECHA", 1, 0, 'C')
                 pdf.cell(60, 6, "TRATAMIENTO", 1, 0, 'C')
@@ -437,25 +443,19 @@ def crear_pdf_historia(p, historial):
                 pdf.set_font('Arial', '', 8)
                 y_curr = pdf.get_y()
 
-            # 3. Dibujar Celdas con altura unificada
-            pdf.set_xy(x_curr, y_curr) # Volver al inicio de fila
-            
-            # Fecha (Centrado vertical manual si se desea, o top align)
-            pdf.rect(x_curr, y_curr, 25, h_row) # Borde
             pdf.set_xy(x_curr, y_curr)
-            pdf.multi_cell(25, 5, txt_fecha, 0, 'C') # Contenido
+            pdf.rect(x_curr, y_curr, 25, h_row) 
+            pdf.set_xy(x_curr, y_curr)
+            pdf.multi_cell(25, 5, txt_fecha, 0, 'C') 
             
-            # Tratamiento
-            pdf.rect(x_curr + 25, y_curr, 60, h_row) # Borde
+            pdf.rect(x_curr + 25, y_curr, 60, h_row) 
             pdf.set_xy(x_curr + 25, y_curr)
-            pdf.multi_cell(60, 5, txt_trat, 0, 'L') # Contenido
+            pdf.multi_cell(60, 5, txt_trat, 0, 'L') 
             
-            # Notas (Ya sabemos que cabe)
-            pdf.rect(x_curr + 85, y_curr, 105, h_row) # Borde
+            pdf.rect(x_curr + 85, y_curr, 105, h_row) 
             pdf.set_xy(x_curr + 85, y_curr)
-            pdf.multi_cell(105, 5, txt_nota, 0, 'L') # Contenido real
+            pdf.multi_cell(105, 5, txt_nota, 0, 'L') 
             
-            # 4. Mover cursor para siguiente fila
             pdf.set_xy(x_curr, y_curr + h_row)
             
     val = pdf.output(dest='S'); return val.encode('latin-1') if isinstance(val, str) else bytes(val)
@@ -505,7 +505,7 @@ def vista_consultorio():
         with st.expander("🔍 BUSCAR CITAS", expanded=False):
             q_cita = st.text_input("Buscar cita por nombre:")
             if q_cita:
-                df = pd.read_sql(f"SELECT fecha, hora, nombre_paciente, tratamiento, doctor_atendio, estado_pago FROM citas WHERE nombre_paciente LIKE '%{sanitizar(q_cita)}%' ORDER BY timestamp DESC", conn)
+                df = pd.read_sql(f"SELECT fecha, hora, nombre_paciente, tratamiento, doctor_atendio, estado_pago FROM citas WHERE nombre_paciente LIKE '%{formato_nombre_legal(q_cita)}%' ORDER BY timestamp DESC", conn)
                 st.dataframe(df)
 
         col_cal1, col_cal2 = st.columns([1, 2.5])
@@ -531,11 +531,10 @@ def vista_consultorio():
                             elif p_sel != "Seleccionar...":
                                 id_p = p_sel.split(" - ")[0]; nom_p = p_sel.split(" - ")[1]
                                 c = conn.cursor()
-                                # [FIX V25.2] LIMPIEZA DE NOTAS AL AGENDAR (NO RIESGOS)
-                                nota_final = sanitizar(m_sel) # Solo motivo/nota usuario
+                                nota_final = formato_oracion(m_sel) 
                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, monto_pagado, saldo_pendiente, estado_pago, precio_lista, precio_final, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, notas, fecha_pago, costo_laboratorio, categoria) 
                                                                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                                         (int(time.time()), fecha_ver_str, h_sel, id_p, nom_p, "General", sanitizar(m_sel), d_sel, 0, 0, "Pendiente", 0, 0, 0, "No", 0, 0, "", "No", nota_final, "", 0, "General"))
+                                         (int(time.time()), fecha_ver_str, h_sel, id_p, nom_p, "General", formato_titulo(m_sel), d_sel, 0, 0, "Pendiente", 0, 0, 0, "No", 0, 0, "", "No", nota_final, "", 0, "General"))
                                 conn.commit(); st.success(f"Agendado"); time.sleep(1); st.rerun()
                             else: st.error("Seleccione paciente")
 
@@ -548,10 +547,10 @@ def vista_consultorio():
                             ocupado = verificar_disponibilidad(fecha_ver_str, hora_pros)
                             if ocupado and not urgencia_p: st.error(f"⚠️ Horario {hora_pros} OCUPADO.")
                             elif nombre_pros and len(tel_pros) == 10:
-                                id_temp = f"PROS-{int(time.time())}"; nom_final = sanitizar(nombre_pros)
+                                id_temp = f"PROS-{int(time.time())}"; nom_final = formato_nombre_legal(nombre_pros)
                                 c = conn.cursor()
                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, estado_pago, notas, precio_lista, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, fecha_pago, costo_laboratorio, categoria) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                                         (int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, "Primera Vez", sanitizar(motivo_pros), doc_pros, 0, 0, 0, "Pendiente", f"Tel: {tel_pros}", 0, 0, "No", 0, 0, "", "No", "", 0, "Primera Vez"))
+                                         (int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, "Primera Vez", formato_oracion(motivo_pros), doc_pros, 0, 0, 0, "Pendiente", f"Tel: {tel_pros}", 0, 0, "No", 0, 0, "", "No", "", 0, "Primera Vez"))
                                 conn.commit(); st.success("Agendado"); time.sleep(1); st.rerun()
                             else: st.error("Datos incorrectos")
             
@@ -615,7 +614,7 @@ def vista_consultorio():
                         hist_notas = pd.read_sql(f"SELECT fecha, tratamiento, notas FROM citas WHERE id_paciente='{id_sel_str}' ORDER BY timestamp DESC", conn)
                         if st.button("🖨️ Descargar Historia (PDF)"):
                             pdf_bytes = crear_pdf_historia(p_data, hist_notas)
-                            clean_name = f"{p_data['id_paciente']}_HISTORIAL_{sanitizar(p_data['nombre'])}_{sanitizar(p_data['apellido_paterno'])}.pdf".replace(" ", "_")
+                            clean_name = f"{p_data['id_paciente']}_HISTORIAL_{formato_nombre_legal(p_data['nombre'])}_{formato_nombre_legal(p_data['apellido_paterno'])}.pdf".replace(" ", "_")
                             st.download_button("📥 Bajar PDF", pdf_bytes, clean_name, "application/pdf")
                     with c_hist:
                         st.markdown("#### 📜 Notas")
@@ -644,7 +643,7 @@ def vista_consultorio():
                 c4, c5, c6 = st.columns(3)
                 nacimiento = c4.date_input("Nacimiento", min_value=datetime(1920,1,1)); tel = c5.text_input("Tel (10 dígitos)", max_chars=10); email = c6.text_input("Email")
                 c7, c8_a, c8_b = st.columns([1,1,1])
-                sexo = c7.selectbox("Sexo", ["Mujer", "Hombre"])
+                sexo = c7.selectbox("Sexo", ["Masculino", "Femenino"])
                 rfc_base = c8_a.text_input("RFC (Opcional)", max_chars=10, help="Dejar vacío para calcular automático")
                 homoclave = c8_b.text_input("Homoclave", max_chars=3)
                 st.markdown("**Datos Adicionales**")
@@ -668,12 +667,13 @@ def vista_consultorio():
                     if not aviso: st.error("Acepte Aviso Privacidad"); st.stop()
                     if not tel.isdigit() or len(tel) != 10: st.error("Teléfono incorrecto"); st.stop()
                     if not nombre or not paterno: st.error("Nombre incompleto"); st.stop()
-                    if not rfc_base: rfc_final = calcular_rfc_10(nombre, paterno, materno, nacimiento) + sanitizar(homoclave)
-                    else: rfc_final = sanitizar(rfc_base) + sanitizar(homoclave)
-                    nuevo_id = generar_id_unico(sanitizar(nombre), sanitizar(paterno), nacimiento)
+                    if not rfc_base: rfc_final = calcular_rfc_10(nombre, paterno, materno, nacimiento) + formato_nombre_legal(homoclave)
+                    else: rfc_final = formato_nombre_legal(rfc_base) + formato_nombre_legal(homoclave)
+                    nuevo_id = generar_id_unico(nombre, paterno, nacimiento)
                     c = conn.cursor()
+                    # FORMATO DE INSERT: NOMBRES (LEGAL), OTROS (TITULO), NOTAS (ORACION)
                     c.execute("INSERT INTO pacientes (id_paciente, fecha_registro, nombre, apellido_paterno, apellido_materno, telefono, email, rfc, regimen, uso_cfdi, cp, nota_fiscal, sexo, estado, fecha_nacimiento, antecedentes_medicos, ahf, app, apnp, ocupacion, estado_civil, domicilio, tutor, contacto_emergencia, motivo_consulta, exploracion_fisica, diagnostico) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                             (nuevo_id, get_fecha_mx(), sanitizar(nombre), sanitizar(paterno), sanitizar(materno), tel, limpiar_email(email), rfc_final, regimen, uso_cfdi, cp, "", sexo, "Activo", format_date_latino(nacimiento), "", sanitizar(ahf), sanitizar(app), sanitizar(apnp), sanitizar(ocupacion), estado_civil, sanitizar(domicilio), sanitizar(tutor), sanitizar(contacto_emer), sanitizar(motivo_consulta), sanitizar(exploracion), sanitizar(diagnostico)))
+                             (nuevo_id, get_fecha_mx(), formato_nombre_legal(nombre), formato_nombre_legal(paterno), formato_nombre_legal(materno), tel, limpiar_email(email), rfc_final, regimen, uso_cfdi, cp, "", sexo, "Activo", format_date_latino(nacimiento), "", formato_oracion(ahf), formato_oracion(app), formato_oracion(apnp), formato_titulo(ocupacion), estado_civil, formato_titulo(domicilio), formato_nombre_legal(tutor), formato_nombre_legal(contacto_emer), formato_oracion(motivo_consulta), formato_oracion(exploracion), formato_oracion(diagnostico)))
                     conn.commit(); st.success(f"✅ Paciente {nombre} guardado."); time.sleep(1.5); st.rerun()
         with tab_e:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
@@ -701,7 +701,7 @@ def vista_consultorio():
                         if st.form_submit_button("💾 ACTUALIZAR TODO"):
                             c = conn.cursor()
                             c.execute("UPDATE pacientes SET nombre=?, apellido_paterno=?, apellido_materno=?, telefono=?, email=?, app=?, ahf=?, apnp=?, rfc=?, cp=?, regimen=?, contacto_emergencia=? WHERE id_paciente=?", 
-                                     (sanitizar(e_nom), sanitizar(e_pat), sanitizar(e_mat), formatear_telefono_db(e_tel), limpiar_email(e_email), sanitizar(e_app), sanitizar(e_ahf), sanitizar(e_apnp), sanitizar(e_rfc), e_cp, e_reg, sanitizar(e_cont), id_target))
+                                     (formato_nombre_legal(e_nom), formato_nombre_legal(e_pat), formato_nombre_legal(e_mat), formatear_telefono_db(e_tel), limpiar_email(e_email), formato_oracion(e_app), formato_oracion(e_ahf), formato_oracion(e_apnp), formato_nombre_legal(e_rfc), e_cp, e_reg, formato_nombre_legal(e_cont), id_target))
                             conn.commit(); st.success("Datos actualizados."); time.sleep(1.5); st.rerun()
 
     elif menu == "3. Planes de Tratamiento":
@@ -753,8 +753,7 @@ def vista_consultorio():
                     else:
                         estatus = "Pagado" if saldo <= 0 else "Pendiente"
                         c = conn.cursor()
-                        # [FIX V25.2] LIMPIEZA DE NOTAS (DB FIX)
-                        nota_final = sanitizar(notas)
+                        nota_final = formato_oracion(notas)
                         c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                  (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, abono, saldo, get_fecha_mx(), costo_lab))
                         if agendar:
@@ -858,7 +857,7 @@ def vista_consultorio():
                             pdf_bytes = crear_pdf_consentimiento(nombre_paciente_full, doc_full, cedula_full, tipo_doc, tratamiento_legal, riesgo_legal, img_pac, img_doc, testigos_dict, nivel_riesgo)
                             
                             prefix = "CONSENTIMIENTO" if "Consentimiento" in tipo_doc else "AVISO_PRIVACIDAD"
-                            clean_filename = f"{prefix}_{sanitizar(p_obj['nombre'])}_{sanitizar(p_obj['apellido_paterno'])}.pdf".replace(" ", "_")
+                            clean_filename = f"{prefix}_{formato_nombre_legal(p_obj['nombre'])}_{formato_nombre_legal(p_obj['apellido_paterno'])}.pdf".replace(" ", "_")
                             
                             st.download_button("Descargar PDF Firmado", pdf_bytes, clean_filename, "application/pdf")
                 else:
