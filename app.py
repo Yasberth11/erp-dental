@@ -464,6 +464,7 @@ def vista_consultorio():
                 with tab_reg:
                     with st.form("cita_registrada", clear_on_submit=True):
                         pacientes_raw = pd.read_sql("SELECT id_paciente, nombre, apellido_paterno FROM pacientes", conn)
+                        # [FIX V25.0] SELECTOR ESTANDARIZADO
                         lista_pac = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist() if not pacientes_raw.empty else []
                         p_sel = st.selectbox("Paciente", ["Seleccionar..."] + lista_pac)
                         h_sel = st.selectbox("Hora", generar_slots_tiempo())
@@ -545,7 +546,7 @@ def vista_consultorio():
         with tab_b:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
-                # [FIX V24.1] Estandarización de selector
+                # [FIX V25.0] SELECTOR ESTANDARIZADO
                 lista_busqueda = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 seleccion = st.selectbox("Seleccionar:", ["..."] + lista_busqueda)
                 if seleccion != "...":
@@ -556,13 +557,29 @@ def vista_consultorio():
                     c_info, c_hist = st.columns([1, 2])
                     with c_info:
                         st.markdown(f"""<div class="royal-card"><h3>👤 {p_data['nombre']} {p_data['apellido_paterno']}</h3><b>Edad:</b> {edad} Años<br><b>Tel:</b> {format_tel_visual(p_data['telefono'])}<br><b>RFC:</b> {p_data.get('rfc', 'N/A')}</div>""", unsafe_allow_html=True)
-                        hist_notas = pd.read_sql(f"SELECT fecha, tratamiento, doctor_atendio, notas FROM citas WHERE id_paciente='{id_sel_str}' ORDER BY timestamp DESC", conn)
+                        hist_notas = pd.read_sql(f"SELECT fecha, tratamiento, notas FROM citas WHERE id_paciente='{id_sel_str}' ORDER BY timestamp DESC", conn)
                         if st.button("🖨️ Descargar Historia (PDF)"):
                             pdf_bytes = crear_pdf_historia(p_data, hist_notas)
                             clean_name = f"{p_data['id_paciente']}_HISTORIAL_{sanitizar(p_data['nombre'])}_{sanitizar(p_data['apellido_paterno'])}.pdf".replace(" ", "_")
                             st.download_button("📥 Bajar PDF", pdf_bytes, clean_name, "application/pdf")
                     with c_hist:
-                        st.markdown("#### 📜 Notas"); st.dataframe(hist_notas[['fecha', 'tratamiento', 'notas']], use_container_width=True)
+                        st.markdown("#### 📜 Notas")
+                        # [FIX V25.0] TABLA NOTAS: CONSECUTIVO Y TEXTO LARGO
+                        if not hist_notas.empty:
+                            df_notes = hist_notas[['fecha', 'tratamiento', 'notas']].copy()
+                            df_notes.index = range(1, len(df_notes) + 1)
+                            df_notes.index.name = "CONSECUTIVO"
+                            df_notes.columns = ["FECHA", "TRATAMIENTO", "NOTAS"]
+                            st.dataframe(
+                                df_notes,
+                                use_container_width=True,
+                                column_config={
+                                    "NOTAS": st.column_config.TextColumn("NOTAS", width="large")
+                                }
+                            )
+                        else:
+                            st.info("Sin notas registradas.")
+
         with tab_n:
             st.markdown("#### Formulario Alta (NOM-004)")
             with st.form("alta_paciente", clear_on_submit=True):
@@ -605,7 +622,7 @@ def vista_consultorio():
         with tab_e:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
-                # [FIX V24.1] Estandarización de selector
+                # [FIX V25.0] SELECTOR ESTANDARIZADO
                 lista_edit = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 sel_edit = st.selectbox("Buscar Paciente:", ["Select..."] + lista_edit)
                 if sel_edit != "Select...":
@@ -636,7 +653,7 @@ def vista_consultorio():
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         if not pacientes.empty:
-            # [FIX V24.1] Estandarización de selector
+            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]
             st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
@@ -647,7 +664,7 @@ def vista_consultorio():
                 if deuda > 0: c2.error("PENDIENTE") 
                 else: c2.success("AL CORRIENTE")
                 
-                # [FIX V24.1] Formato de Tabla (Columnas y Consecutivo)
+                # [FIX V25.0] TABLA FINANZAS: MAYÚSCULAS Y CONSECUTIVO
                 df_show = df_f[['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente']].reset_index(drop=True)
                 df_show.index = df_show.index + 1
                 df_show.columns = ['FECHA', 'TRATAMIENTO', 'PRECIO FINAL', 'MONTO PAGADO', 'SALDO PENDIENTE']
@@ -688,13 +705,13 @@ def vista_consultorio():
     elif menu == "4. Documentos & Firmas":
         st.title("⚖️ Centro Legal"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
         if not df_p.empty:
-            # [FIX V24.1] Estandarización de selector
+            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", ["..."]+df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             if sel != "...":
                 id_target = sel.split(" - ")[0]; p_obj = df_p[df_p['id_paciente'] == id_target].iloc[0]
                 tipo_doc = st.selectbox("Documento", ["Consentimiento Informado", "Aviso de Privacidad"])
                 
-                # [FIX V24.1] Inicialización ROBUSTA de variables para evitar UnboundLocalError
+                # [FIX V25.0] VARIABLES DE TESTIGOS SIEMPRE INICIALIZADAS (EVITA CRASH)
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK" 
