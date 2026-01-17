@@ -654,12 +654,12 @@ def vista_consultorio():
                 materno = c3.text_input("A. Materno")
                 
                 c4, c5, c6 = st.columns(3)
-                # [FIX V27.2] FECHA: 1920-HOY (DINÁMICO), DEFAULT 1990
-                nacimiento = c4.date_input("Nacimiento", min_value=datetime(1920,1,1), max_value=datetime.now(TZ_MX).date(), value=datetime(1990,1,1))
+                # [FIX V27.2] FECHA: 1920-HOY (DINÁMICO), DEFAULT HOY
+                nacimiento = c4.date_input("Fecha de Nacimiento", min_value=datetime(1920,1,1), max_value=datetime.now(TZ_MX).date(), value=datetime.now(TZ_MX).date())
                 sexo = c5.selectbox("Sexo", ["Masculino", "Femenino"])
                 ocupacion = c6.selectbox("Ocupación", LISTA_OCUPACIONES)
                 
-                st.markdown("**Contacto y Civil**")
+                st.markdown("**Datos de Contacto y Residencia**")
                 ce1, ce2, ce3 = st.columns(3)
                 tel = ce1.text_input("Celular Paciente (10)", max_chars=10)
                 email = ce2.text_input("Email")
@@ -684,6 +684,9 @@ def vista_consultorio():
                 cem1, cem2 = st.columns(2)
                 contacto_emer_nom = cem1.text_input("Nombre Contacto Emergencia")
                 contacto_emer_tel = cem2.text_input("Tel Emergencia (10)", max_chars=10)
+                
+                # [FIX V28.0] REINTEGRACIÓN DEL CAMPO MOTIVO DE CONSULTA
+                motivo_consulta = st.text_area("Motivo de Consulta*")
 
                 st.markdown("**Historia Médica**")
                 ahf = st.text_area("AHF", placeholder="Diabetes, Hipertensión..."); app = st.text_area("APP", placeholder="Alergias, Cirugías..."); apnp = st.text_area("APNP", placeholder="Tabaquismo, Alcoholismo...")
