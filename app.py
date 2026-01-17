@@ -618,109 +618,101 @@ def vista_consultorio():
                 else:
                     st.info("No se encontraron citas.")
 
-        col_cal1, col_cal2 = st.columns([1, 2.5])
+        # [FIX V36.0] REORDENAMIENTO DE COLUMNAS (40% - 60%) Y ELIMINACIÓN DE FORMULARIOS ESTÁTICOS
+        col_cal1, col_cal2 = st.columns([2, 3])
         with col_cal1:
             st.markdown("### 📆 Gestión")
             fecha_ver_obj = st.date_input("Seleccionar Fecha", datetime.now(TZ_MX), format="DD/MM/YYYY")
             fecha_ver_str = format_date_latino(fecha_ver_obj)
             
-            with st.expander("➕ Agendar Cita Nueva", expanded=False):
+            with st.expander("➕ Agendar Cita Nueva", expanded=True):
                 tab_reg, tab_new = st.tabs(["Registrado", "Prospecto"])
+                
+                # --- PESTAÑA REGISTRADO ---
                 with tab_reg:
-                    # [FIX V35.1] CASCADA DINAMICA - REGISTRADO
+                    # Preparación de datos (Sin st.form)
                     servicios = pd.read_sql("SELECT * FROM servicios", conn)
                     cats = servicios['categoria'].unique()
-                    
-                    # 1. Selector de PACIENTE
                     pacientes_raw = pd.read_sql("SELECT id_paciente, nombre, apellido_paterno FROM pacientes", conn)
                     lista_pac = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist() if not pacientes_raw.empty else []
-                    
-                    with st.form("cita_registrada", clear_on_submit=True):
-                        p_sel = st.selectbox("Paciente", ["Seleccionar..."] + lista_pac)
+
+                    # [DISEÑO V36.0] CONTAINER CON BORDE
+                    with st.container(border=True):
+                        st.caption("Datos del Paciente")
+                        p_sel_r = st.selectbox("Paciente*", ["Seleccionar..."] + lista_pac, key="p_reg_sel")
                         
-                        # 2. Selector CATEGORÍA (Filtro Nivel 1)
-                        # Nota: Streamlit Forms no permiten reactividad instantánea interna (refresh parcial).
-                        # Para "simular" dinamismo real dentro de un form, se debe usar st.empty o sacar los selectores fuera.
-                        # PERO: Para mantener la estructura solicitada, usaremos la estrategia de sacar los selectores de "Qué se hará" FUERA del form submit.
-                        # CORRECCION ARQUITECTURA V35.1: Sacamos los selectores fuera del form para que sean reactivos, 
-                        # y luego pasamos sus valores al form o usamos un botón simple.
-                        # Dado que el usuario pide "no cambies lo demás", ajustaremos la logica visual aqui mismo.
-                        pass # Placeholder para romper el form estricto
-                    
-                    # [RE-INGENIERÍA UX V35.1] - FLUJO REACTIVO FUERA DE FORM
-                    st.info("Configuración de Cita (Registrado)")
-                    col_r1, col_r2 = st.columns(2)
-                    p_sel_r = col_r1.selectbox("Paciente*", ["Seleccionar..."] + lista_pac, key="p_reg_sel")
-                    cat_sel_r = col_r2.selectbox("Categoría Tratamiento", cats, key="cat_reg_sel")
-                    
-                    # Filtrar tratamientos basados en categoria
-                    trats_filtrados_r = servicios[servicios['categoria'] == cat_sel_r]['nombre_tratamiento'].unique()
-                    trat_sel_r = st.selectbox("Tratamiento*", trats_filtrados_r, key="trat_reg_sel")
-                    
-                    # Calcular duración
-                    dur_default_r = 30
-                    if trat_sel_r:
-                        row_dur = servicios[servicios['nombre_tratamiento'] == trat_sel_r]
-                        if not row_dur.empty: dur_default_r = int(row_dur.iloc[0]['duracion'])
-                    
-                    col_r3, col_r4, col_r5 = st.columns(3)
-                    duracion_cita_r = col_r3.number_input("Duración (min)", value=dur_default_r, step=30, key="dur_reg")
-                    h_sel_r = col_r4.selectbox("Hora Inicio", generar_slots_tiempo(), key="hora_reg")
-                    d_sel_r = col_r5.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"], key="doc_reg")
-                    
-                    urgencia_r = st.checkbox("🚨 Es Urgencia / Sobrecupo", key="urg_reg")
-                    
-                    if st.button("💾 Agendar Cita (Registrado)"):
-                        ocupado = verificar_disponibilidad(fecha_ver_str, h_sel_r, duracion_cita_r)
-                        if ocupado and not urgencia_r: st.error(f"⚠️ Horario OCUPADO. Revise la agenda.")
-                        elif p_sel_r != "Seleccionar...":
-                            id_p = p_sel_r.split(" - ")[0]; nom_p = p_sel_r.split(" - ")[1]
-                            c = conn.cursor()
-                            nota_final = formato_oracion(f"Cita: {trat_sel_r}")
-                            c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, monto_pagado, saldo_pendiente, estado_pago, precio_lista, precio_final, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, notas, fecha_pago, costo_laboratorio, categoria, duracion) 
-                                                                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                        st.caption("Detalles del Tratamiento")
+                        cat_sel_r = st.selectbox("Categoría", cats, key="cat_reg_sel")
+                        
+                        # Filtro dinámico real (sin form)
+                        trats_filtrados_r = servicios[servicios['categoria'] == cat_sel_r]['nombre_tratamiento'].unique()
+                        trat_sel_r = st.selectbox("Tratamiento*", trats_filtrados_r, key="trat_reg_sel")
+                        
+                        # Duración auto
+                        dur_default_r = 30
+                        if trat_sel_r:
+                            row_dur = servicios[servicios['nombre_tratamiento'] == trat_sel_r]
+                            if not row_dur.empty: dur_default_r = int(row_dur.iloc[0]['duracion'])
+                        
+                        col_tr1, col_tr2 = st.columns(2)
+                        duracion_cita_r = col_tr1.number_input("Duración (min)", value=dur_default_r, step=30, key="dur_reg")
+                        h_sel_r = col_tr2.selectbox("Hora Inicio", generar_slots_tiempo(), key="hora_reg")
+                        
+                        d_sel_r = st.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"], key="doc_reg")
+                        urgencia_r = st.checkbox("🚨 Es Urgencia / Sobrecupo", key="urg_reg")
+                        
+                        if st.button("💾 Agendar Cita (Registrado)", use_container_width=True):
+                            ocupado = verificar_disponibilidad(fecha_ver_str, h_sel_r, duracion_cita_r)
+                            if ocupado and not urgencia_r: st.error(f"⚠️ Horario OCUPADO. Revise la agenda.")
+                            elif p_sel_r != "Seleccionar...":
+                                id_p = p_sel_r.split(" - ")[0]; nom_p = p_sel_r.split(" - ")[1]
+                                c = conn.cursor()
+                                nota_final = formato_oracion(f"Cita: {trat_sel_r}")
+                                c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, monto_pagado, saldo_pendiente, estado_pago, precio_lista, precio_final, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, notas, fecha_pago, costo_laboratorio, categoria, duracion) 
+                                                                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                         (int(time.time()), fecha_ver_str, h_sel_r, id_p, nom_p, "General", trat_sel_r, d_sel_r, 0, 0, "Pendiente", 0, 0, 0, "No", 0, 0, "", "No", nota_final, "", 0, cat_sel_r, duracion_cita_r))
-                            conn.commit(); st.success(f"Agendado"); time.sleep(1); st.rerun()
-                        else: st.error("Seleccione paciente")
+                                conn.commit(); st.success(f"Agendado"); time.sleep(1); st.rerun()
+                            else: st.error("Seleccione paciente")
 
-
+                # --- PESTAÑA PROSPECTO ---
                 with tab_new:
-                    # [FIX V35.1] CASCADA DINAMICA - PROSPECTO
-                    st.info("Configuración de Cita (Prospecto)")
-                    col_p1, col_p2 = st.columns(2)
-                    nombre_pros = col_p1.text_input("Nombre Completo*", key="nom_pros")
-                    tel_pros = col_p2.text_input("Teléfono (10)*", max_chars=10, key="tel_pros")
-                    
-                    col_p3, col_p4 = st.columns(2)
-                    cat_sel_p = col_p3.selectbox("Categoría Tratamiento", cats, key="cat_pros_sel")
-                    
-                    # Filtro reactivo
-                    trats_filtrados_p = servicios[servicios['categoria'] == cat_sel_p]['nombre_tratamiento'].unique()
-                    trat_sel_p = col_p4.selectbox("Tratamiento*", trats_filtrados_p, key="trat_pros_sel")
-                    
-                    # Duración reactiva
-                    dur_default_p = 30
-                    if trat_sel_p:
-                        row_dur_p = servicios[servicios['nombre_tratamiento'] == trat_sel_p]
-                        if not row_dur_p.empty: dur_default_p = int(row_dur_p.iloc[0]['duracion'])
-                    
-                    col_p5, col_p6, col_p7 = st.columns(3)
-                    duracion_cita_p = col_p5.number_input("Duración (min)", value=dur_default_p, step=30, key="dur_pros_inp")
-                    hora_pros = col_p6.selectbox("Hora Inicio", generar_slots_tiempo(), key="hora_pros")
-                    doc_pros = col_p7.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"], key="doc_pros")
-                    
-                    urgencia_p = st.checkbox("🚨 Es Urgencia", key="urg_pros")
-                    
-                    if st.button("💾 Agendar Prospecto"):
-                        ocupado = verificar_disponibilidad(fecha_ver_str, hora_pros, duracion_cita_p)
-                        if ocupado and not urgencia_p: st.error(f"⚠️ Horario OCUPADO.")
-                        elif nombre_pros and len(tel_pros) == 10:
-                            id_temp = f"PROS-{int(time.time())}"; nom_final = formato_nombre_legal(nombre_pros)
-                            c = conn.cursor()
-                            c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, estado_pago, notas, precio_lista, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, fecha_pago, costo_laboratorio, categoria, duracion) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                    with st.container(border=True):
+                        st.caption("Datos Básicos")
+                        col_p1, col_p2 = st.columns(2)
+                        nombre_pros = col_p1.text_input("Nombre Completo*", key="nom_pros")
+                        tel_pros = col_p2.text_input("Teléfono (10)*", max_chars=10, key="tel_pros")
+                        
+                        st.caption("Detalles del Tratamiento")
+                        # Recargar servicios para prospecto (asegurar fresh data)
+                        servicios_p = pd.read_sql("SELECT * FROM servicios", conn)
+                        cats_p = servicios_p['categoria'].unique()
+                        cat_sel_p = st.selectbox("Categoría", cats_p, key="cat_pros_sel")
+                        
+                        trats_filtrados_p = servicios_p[servicios_p['categoria'] == cat_sel_p]['nombre_tratamiento'].unique()
+                        trat_sel_p = st.selectbox("Tratamiento*", trats_filtrados_p, key="trat_pros_sel")
+                        
+                        dur_default_p = 30
+                        if trat_sel_p:
+                            row_dur_p = servicios_p[servicios_p['nombre_tratamiento'] == trat_sel_p]
+                            if not row_dur_p.empty: dur_default_p = int(row_dur_p.iloc[0]['duracion'])
+                        
+                        col_tp1, col_tp2 = st.columns(2)
+                        duracion_cita_p = col_tp1.number_input("Duración (min)", value=dur_default_p, step=30, key="dur_pros_inp")
+                        hora_pros = col_tp2.selectbox("Hora Inicio", generar_slots_tiempo(), key="hora_pros")
+                        
+                        doc_pros = st.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"], key="doc_pros")
+                        urgencia_p = st.checkbox("🚨 Es Urgencia", key="urg_pros")
+                        
+                        if st.button("💾 Agendar Prospecto", use_container_width=True):
+                            ocupado = verificar_disponibilidad(fecha_ver_str, hora_pros, duracion_cita_p)
+                            if ocupado and not urgencia_p: st.error(f"⚠️ Horario OCUPADO.")
+                            elif nombre_pros and len(tel_pros) == 10:
+                                id_temp = f"PROS-{int(time.time())}"; nom_final = formato_nombre_legal(nombre_pros)
+                                c = conn.cursor()
+                                c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, estado_pago, notas, precio_lista, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, fecha_pago, costo_laboratorio, categoria, duracion) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                         (int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, "Primera Vez", trat_sel_p, doc_pros, 0, 0, 0, "Pendiente", f"Tel: {tel_pros}", 0, 0, "No", 0, 0, "", "No", "", 0, cat_sel_p, duracion_cita_p))
-                            conn.commit(); st.success("Agendado"); time.sleep(1); st.rerun()
-                        else: st.error("Datos incompletos")
+                                conn.commit(); st.success("Agendado"); time.sleep(1); st.rerun()
+                            else: st.error("Datos incompletos")
             
             st.markdown("### 🔄 Modificar Agenda")
             df_c = pd.read_sql("SELECT * FROM citas", conn)
@@ -856,6 +848,7 @@ def vista_consultorio():
                 materno = c3.text_input("A. Materno")
                 
                 c4, c5, c6 = st.columns(3)
+                # [FIX V27.2] FECHA: 1920-HOY (DINÁMICO), DEFAULT HOY
                 nacimiento = c4.date_input("Fecha de Nacimiento", min_value=datetime(1920,1,1), max_value=datetime.now(TZ_MX).date(), value=datetime.now(TZ_MX).date())
                 sexo = c5.selectbox("Sexo", ["Masculino", "Femenino"])
                 ocupacion = c6.selectbox("Ocupación", LISTA_OCUPACIONES)
@@ -1133,6 +1126,7 @@ def vista_consultorio():
                             
                             testigos_dict = {'n1': t1_name, 'n2': t2_name, 'img_t1': img_t1, 'img_t2': img_t2}
                             
+                            # [V30.0] DATOS TUTOR PARA PDF
                             edad_actual, _ = calcular_edad_completa(p_obj['fecha_nacimiento'])
                             tutor_info = {'nombre': p_obj.get('tutor', ''), 'relacion': p_obj.get('parentesco_tutor', '')}
                             
