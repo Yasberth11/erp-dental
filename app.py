@@ -627,7 +627,6 @@ def vista_consultorio():
                             st.download_button("📥 Bajar PDF", pdf_bytes, clean_name, "application/pdf")
                     with c_hist:
                         st.markdown("#### 📜 Notas")
-                        # [FIX V25.1] TABLA NOTAS: CONSECUTIVO Y ANCHO
                         if not hist_notas.empty:
                             df_notes = hist_notas[['fecha', 'tratamiento', 'notas']].copy()
                             df_notes.index = range(1, len(df_notes) + 1)
@@ -636,7 +635,7 @@ def vista_consultorio():
                             st.dataframe(
                                 df_notes,
                                 use_container_width=True,
-                                hide_index=False, # Mostrar índice (consecutivo)
+                                hide_index=False,
                                 column_config={
                                     "CONSECUTIVO": st.column_config.NumberColumn("CONSECUTIVO", width="small"),
                                     "NOTAS": st.column_config.TextColumn("NOTAS", width="large")
@@ -655,8 +654,8 @@ def vista_consultorio():
                 materno = c3.text_input("A. Materno")
                 
                 c4, c5, c6 = st.columns(3)
-                # [FIX V27.0] Fecha default 1990 para evitar "0 años"
-                nacimiento = c4.date_input("Nacimiento", min_value=datetime(1920,1,1), value=datetime(1990,1,1))
+                # [FIX V27.2] FECHA: 1920-HOY (DINÁMICO), DEFAULT 1990
+                nacimiento = c4.date_input("Nacimiento", min_value=datetime(1920,1,1), max_value=datetime.now(TZ_MX).date(), value=datetime(1990,1,1))
                 sexo = c5.selectbox("Sexo", ["Masculino", "Femenino"])
                 ocupacion = c6.selectbox("Ocupación", LISTA_OCUPACIONES)
                 
@@ -691,16 +690,16 @@ def vista_consultorio():
                 st.markdown("**Exploración y Diagnóstico (Dr)**")
                 exploracion = st.text_area("Exploración Física"); diagnostico = st.text_area("Diagnóstico Presuntivo")
                 
-                # [FIX V27.1] DATOS FISCALES CON EXPANDER Y CAMPO HOMOCLAVE
+                # [FIX V27.1] DATOS FISCALES CON HOMOCLAVE
                 rfc_final = "" 
                 regimen = ""
                 uso_cfdi = ""
                 cp = ""
                 
                 with st.expander("Datos de Facturación (Opcional)", expanded=False):
-                    cf1, cf2, cf3 = st.columns([2, 1, 2])
-                    rfc_input = cf1.text_input("RFC (10 Caracteres)", max_chars=10, help="Dejar vacío para cálculo automático")
-                    homoclave_input = cf2.text_input("Homoclave", max_chars=3)
+                    cf1, cf2, cf3 = st.columns([2, 1, 1])
+                    rfc_base = cf1.text_input("RFC (Sin Homoclave)", max_chars=13)
+                    homoclave = cf2.text_input("Homoclave", max_chars=3)
                     cp = cf3.text_input("C.P.", max_chars=5)
                     
                     cf4, cf5 = st.columns(2)
@@ -720,15 +719,15 @@ def vista_consultorio():
                         if not tutor or not parentesco:
                             st.error("⛔ ERROR: Para menores de 18 años, el Nombre del Tutor y Parentesco son OBLIGATORIOS."); st.stop()
 
-                    # [FIX V27.1] Lógica de RFC + Homoclave
-                    rfc_parte_1 = ""
-                    if rfc_input: 
-                        rfc_parte_1 = formato_nombre_legal(rfc_input)
-                    else: 
-                        rfc_parte_1 = calcular_rfc_10(nombre, paterno, materno, nacimiento)
-                    
-                    rfc_parte_2 = formato_nombre_legal(homoclave_input) if homoclave_input else "XXX"
-                    rfc_final = rfc_parte_1 + rfc_parte_2
+                    # [FIX V27.1] LOGICA HIBRIDA RFC
+                    if rfc_base:
+                        # Manual: Concatenar lo que haya
+                        rfc_final = formato_nombre_legal(rfc_base) + formato_nombre_legal(homoclave)
+                    else:
+                        # Automático: Calcular Base + (Homoclave Manual o XXX)
+                        base_10 = calcular_rfc_10(nombre, paterno, materno, nacimiento)
+                        homo_sufijo = formato_nombre_legal(homoclave) if homoclave else "XXX"
+                        rfc_final = base_10 + homo_sufijo
                     
                     nuevo_id = generar_id_unico(nombre, paterno, nacimiento)
                     c = conn.cursor()
@@ -739,7 +738,6 @@ def vista_consultorio():
         with tab_e:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
-                # [FIX V25.0] SELECTOR ESTANDARIZADO
                 lista_edit = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 sel_edit = st.selectbox("Buscar Paciente:", ["Select..."] + lista_edit)
                 if sel_edit != "Select...":
@@ -774,7 +772,6 @@ def vista_consultorio():
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         if not pacientes.empty:
-            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]
             st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
@@ -785,7 +782,6 @@ def vista_consultorio():
                 if deuda > 0: c2.error("PENDIENTE") 
                 else: c2.success("AL CORRIENTE")
                 
-                # [FIX V25.1] TABLA FINANZAS: MAYÚSCULAS Y CONSECUTIVO CENTRADO
                 df_show = df_f[['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente']].reset_index(drop=True)
                 df_show.index = df_show.index + 1
                 df_show.index.name = 'CONSECUTIVO'
@@ -821,7 +817,6 @@ def vista_consultorio():
                     else:
                         estatus = "Pagado" if saldo <= 0 else "Pendiente"
                         c = conn.cursor()
-                        # [FIX V25.2] LIMPIEZA DE NOTAS (DB FIX)
                         nota_final = formato_oracion(notas)
                         c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                  (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, abono, saldo, get_fecha_mx(), costo_lab))
@@ -833,39 +828,33 @@ def vista_consultorio():
     elif menu == "4. Documentos & Firmas":
         st.title("⚖️ Centro Legal"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
         if not df_p.empty:
-            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", ["..."]+df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             if sel != "...":
                 id_target = sel.split(" - ")[0]; p_obj = df_p[df_p['id_paciente'] == id_target].iloc[0]
                 tipo_doc = st.selectbox("Documento", ["Consentimiento Informado", "Aviso de Privacidad"])
                 
-                # [FIX V25.0] VARIABLES DE TESTIGOS SIEMPRE INICIALIZADAS (EVITA CRASH)
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK" 
                 t1_name = ""; t2_name = ""
                 img_t1 = None; img_t2 = None
                 
-                # [FIX V27.0] LOGICA DE COMBOS (MULTI TRATAMIENTO)
                 if "Consentimiento" in tipo_doc:
                     # BUSCAR TRATAMIENTOS DE HOY
                     hoy_str = get_fecha_mx()
                     citas_hoy = pd.read_sql(f"SELECT * FROM citas WHERE id_paciente='{id_target}' AND fecha='{hoy_str}' AND (precio_final > 0 OR monto_pagado > 0)", conn)
                     
                     if not citas_hoy.empty:
-                        # CONCATENAR TRATAMIENTOS Y RIESGOS
                         lista_tratamientos = citas_hoy['tratamiento'].unique().tolist()
                         tratamiento_legal = ", ".join(lista_tratamientos)
                         riesgo_legal = ""
-                        nivel_riesgo = "LOW_RISK" # Base
+                        nivel_riesgo = "LOW_RISK" 
                         
                         servicios = pd.read_sql("SELECT * FROM servicios", conn)
                         
                         for trat in lista_tratamientos:
                             riesgo_item = RIESGOS_DB.get(trat, "")
                             if riesgo_item: riesgo_legal += f"- {trat}: {riesgo_item}\n"
-                            
-                            # Determinar si hay alguno de ALTO riesgo
                             if not servicios.empty:
                                 row_s = servicios[servicios['nombre_tratamiento'] == trat]
                                 if not row_s.empty and row_s.iloc[0]['consent_level'] == 'HIGH_RISK':
@@ -877,7 +866,7 @@ def vista_consultorio():
                         
                     else:
                         st.warning("⚠️ No hay tratamientos registrados HOY para este paciente. Registre primero en 'Planes de Tratamiento'.")
-                        st.stop() # Detener ejecución si no hay nada que firmar
+                        st.stop()
                 
                 col_doc_sel = st.columns(2)
                 doc_name_sel = col_doc_sel[0].selectbox("Odontólogo Tratante:", list(DOCS_INFO.keys()))
