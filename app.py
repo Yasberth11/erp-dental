@@ -267,9 +267,14 @@ def generar_id_unico(nombre, paterno, nacimiento):
 
 def formatear_telefono_db(numero): return re.sub(r'\D', '', str(numero))
 
+# [FIX V34.0] GENERADOR DE SLOTS 8:00 - 18:00
 def generar_slots_tiempo():
-    slots = []; hora_actual = datetime.strptime("08:00", "%H:%M"); hora_fin = datetime.strptime("20:00", "%H:%M")
-    while hora_actual <= hora_fin: slots.append(hora_actual.strftime("%H:%M")); hora_actual += timedelta(minutes=30)
+    slots = []
+    hora_actual = datetime.strptime("08:00", "%H:%M")
+    hora_fin = datetime.strptime("18:00", "%H:%M") # Cierre operativo para inicio de cita
+    while hora_actual <= hora_fin:
+        slots.append(hora_actual.strftime("%H:%M"))
+        hora_actual += timedelta(minutes=30)
     return slots
 
 def get_regimenes_fiscales(): return ["605 - Sueldos y Salarios", "612 - PFAEP (Actividad Empresarial)", "626 - RESICO", "616 - Sin obligaciones fiscales", "601 - General de Ley Personas Morales"]
@@ -627,13 +632,18 @@ def vista_consultorio():
                         lista_pac = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist() if not pacientes_raw.empty else []
                         p_sel = st.selectbox("Paciente", ["Seleccionar..."] + lista_pac)
                         
-                        servicios = pd.read_sql("SELECT nombre_tratamiento, duracion FROM servicios", conn)
-                        lista_trats = servicios['nombre_tratamiento'].tolist()
-                        m_sel = st.selectbox("Tratamiento Principal", lista_trats)
+                        # [FIX V34.0] SELECTOR JERÁRQUICO
+                        servicios = pd.read_sql("SELECT * FROM servicios", conn)
+                        cats = servicios['categoria'].unique()
+                        cat_sel = st.selectbox("Categoría", cats)
                         
+                        trats = servicios[servicios['categoria'] == cat_sel]['nombre_tratamiento'].unique()
+                        trat_sel = st.selectbox("Tratamiento", trats)
+                        
+                        # Obtener duración default
                         dur_default = 30
-                        if m_sel:
-                            row_dur = servicios[servicios['nombre_tratamiento'] == m_sel]
+                        if trat_sel:
+                            row_dur = servicios[servicios['nombre_tratamiento'] == trat_sel]
                             if not row_dur.empty:
                                 dur_default = int(row_dur.iloc[0]['duracion'])
                         
@@ -649,27 +659,45 @@ def vista_consultorio():
                             elif p_sel != "Seleccionar...":
                                 id_p = p_sel.split(" - ")[0]; nom_p = p_sel.split(" - ")[1]
                                 c = conn.cursor()
-                                nota_final = formato_oracion(f"Cita: {m_sel}") 
+                                nota_final = formato_oracion(f"Cita: {trat_sel}") 
                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, monto_pagado, saldo_pendiente, estado_pago, precio_lista, precio_final, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, notas, fecha_pago, costo_laboratorio, categoria, duracion) 
                                                                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                                         (int(time.time()), fecha_ver_str, h_sel, id_p, nom_p, "General", m_sel, d_sel, 0, 0, "Pendiente", 0, 0, 0, "No", 0, 0, "", "No", nota_final, "", 0, "General", duracion_cita))
+                                         (int(time.time()), fecha_ver_str, h_sel, id_p, nom_p, cat_sel, trat_sel, d_sel, 0, 0, "Pendiente", 0, 0, 0, "No", 0, 0, "", "No", nota_final, "", 0, cat_sel, duracion_cita))
                                 conn.commit(); st.success(f"Agendado ({duracion_cita} min)"); time.sleep(1); st.rerun()
                             else: st.error("Seleccione paciente")
 
                 with tab_new:
                     with st.form("cita_prospecto", clear_on_submit=True):
                         nombre_pros = st.text_input("Nombre"); tel_pros = st.text_input("Tel (10)", max_chars=10)
-                        hora_pros = st.selectbox("Hora", generar_slots_tiempo()); motivo_pros = st.text_input("Motivo", "Revisión 1ra Vez")
+                        
+                        # [FIX V34.0] SELECTOR JERÁRQUICO TAMBIÉN PARA PROSPECTO
+                        servicios_p = pd.read_sql("SELECT * FROM servicios", conn)
+                        cats_p = servicios_p['categoria'].unique()
+                        cat_sel_p = st.selectbox("Categoría", cats_p, key="cat_pros")
+                        
+                        trats_p = servicios_p[servicios_p['categoria'] == cat_sel_p]['nombre_tratamiento'].unique()
+                        trat_sel_p = st.selectbox("Tratamiento", trats_p, key="trat_pros")
+                        
+                        dur_default_p = 30
+                        if trat_sel_p:
+                            row_dur_p = servicios_p[servicios_p['nombre_tratamiento'] == trat_sel_p]
+                            if not row_dur_p.empty:
+                                dur_default_p = int(row_dur_p.iloc[0]['duracion'])
+                                
+                        duracion_cita_p = st.number_input("Duración (Minutos)", min_value=30, step=30, value=dur_default_p, key="dur_pros")
+
+                        hora_pros = st.selectbox("Hora", generar_slots_tiempo()); 
                         doc_pros = st.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"]); urgencia_p = st.checkbox("🚨 Es Urgencia")
+                        
                         if st.form_submit_button("Agendar Prospecto"):
-                            ocupado = verificar_disponibilidad(fecha_ver_str, hora_pros, 30)
+                            ocupado = verificar_disponibilidad(fecha_ver_str, hora_pros, duracion_cita_p)
                             if ocupado and not urgencia_p: st.error(f"⚠️ Horario {hora_pros} OCUPADO.")
                             elif nombre_pros and len(tel_pros) == 10:
                                 id_temp = f"PROS-{int(time.time())}"; nom_final = formato_nombre_legal(nombre_pros)
                                 c = conn.cursor()
-                                # [FIX V33.0] FORZAR DURACION 30 EN INSERT
+                                # Guardar tratamiento real
                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, estado_pago, notas, precio_lista, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, fecha_pago, costo_laboratorio, categoria, duracion) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                                         (int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, "Primera Vez", formato_oracion(motivo_pros), doc_pros, 0, 0, 0, "Pendiente", f"Tel: {tel_pros}", 0, 0, "No", 0, 0, "", "No", "", 0, "Primera Vez", 30))
+                                         (int(time.time()), fecha_ver_str, hora_pros, id_temp, nom_final, "Primera Vez", trat_sel_p, doc_pros, 0, 0, 0, "Pendiente", f"Tel: {tel_pros}", 0, 0, "No", 0, 0, "", "No", "", 0, cat_sel_p, duracion_cita_p))
                                 conn.commit(); st.success("Agendado"); time.sleep(1); st.rerun()
                             else: st.error("Datos incorrectos")
             
@@ -713,7 +741,6 @@ def vista_consultorio():
                 for _, r in df_dia.iterrows():
                     if r['estado_pago'] == 'CANCELADO': continue
                     h_inicio = r['hora']
-                    # [FIX V33.0] SAFET CHECK DURACION (Evita crash si es None o 0)
                     try:
                         dur = int(r['duracion']) if r['duracion'] and r['duracion'] > 0 else 30
                     except: dur = 30
@@ -987,6 +1014,7 @@ def vista_consultorio():
                 st.session_state.id_paciente_activo = id_target
                 
                 tipo_doc = st.selectbox("Documento", ["Consentimiento Informado", "Aviso de Privacidad"])
+                
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK" 
@@ -994,6 +1022,7 @@ def vista_consultorio():
                 img_t1 = None; img_t2 = None
                 
                 if "Consentimiento" in tipo_doc:
+                    # BUSCAR TRATAMIENTOS DE HOY
                     hoy_str = get_fecha_mx()
                     citas_hoy = pd.read_sql(f"SELECT * FROM citas WHERE id_paciente='{id_target}' AND fecha='{hoy_str}' AND (precio_final > 0 OR monto_pagado > 0)", conn)
                     
@@ -1002,6 +1031,7 @@ def vista_consultorio():
                         tratamiento_legal = ", ".join(lista_tratamientos)
                         riesgo_legal = ""
                         nivel_riesgo = "LOW_RISK" 
+                        
                         servicios = pd.read_sql("SELECT * FROM servicios", conn)
                         
                         for trat in lista_tratamientos:
@@ -1077,6 +1107,7 @@ def vista_consultorio():
                             doc_full = DOCS_INFO[doc_name_sel]['nombre']
                             cedula_full = DOCS_INFO[doc_name_sel]['cedula']
                             nombre_paciente_full = f"{p_obj['nombre']} {p_obj['apellido_paterno']} {p_obj.get('apellido_materno','')}"
+                            
                             testigos_dict = {'n1': t1_name, 'n2': t2_name, 'img_t1': img_t1, 'img_t2': img_t2}
                             
                             edad_actual, _ = calcular_edad_completa(p_obj['fecha_nacimiento'])
@@ -1086,6 +1117,7 @@ def vista_consultorio():
                             
                             prefix = "CONSENTIMIENTO" if "Consentimiento" in tipo_doc else "AVISO_PRIVACIDAD"
                             clean_filename = f"{prefix}_{formato_nombre_legal(p_obj['nombre'])}_{formato_nombre_legal(p_obj['apellido_paterno'])}.pdf".replace(" ", "_")
+                            
                             st.download_button("Descargar PDF Firmado", pdf_bytes, clean_filename, "application/pdf")
                 else:
                     st.warning("⚠️ No se genera documento legal para este concepto.")
