@@ -393,14 +393,70 @@ def crear_pdf_historia(p, historial):
     pdf.multi_cell(0, 5, diag, 1); pdf.ln(5)
     
     pdf.set_font('Arial', 'B', 10); pdf.cell(0, 6, "IV. NOTAS DE EVOLUCIÓN", 0, 1, 'L')
+    
+    # [FIX V25.2] WORD WRAP FIX: TABLA CON ALTURA DINÁMICA
     if not historial.empty:
-        pdf.set_font('Arial', 'B', 8); pdf.cell(25, 6, "FECHA", 1); pdf.cell(60, 6, "TRATAMIENTO", 1); pdf.cell(105, 6, "NOTAS / EVOLUCIÓN", 1); pdf.ln()
+        # Headers
+        pdf.set_font('Arial', 'B', 8)
+        # Dibujamos headers manuales para consistencia
+        x_start = pdf.get_x()
+        pdf.cell(25, 6, "FECHA", 1, 0, 'C')
+        pdf.cell(60, 6, "TRATAMIENTO", 1, 0, 'C')
+        pdf.cell(105, 6, "NOTAS / EVOLUCIÓN", 1, 1, 'C') # Salto de línea
+        
         pdf.set_font('Arial', '', 8)
+        
         for _, row in historial.iterrows():
-            pdf.cell(25, 6, str(row['fecha']), 1)
-            pdf.cell(60, 6, str(row['tratamiento'])[:35], 1)
-            nota_str = str(row['notas']) if row['notas'] else ""
-            pdf.cell(105, 6, nota_str[:60], 1); pdf.ln()
+            txt_fecha = str(row['fecha'])
+            txt_trat = str(row['tratamiento'])[:45] # Limitar largo tratamiento visual
+            txt_nota = str(row['notas']) if row['notas'] else ""
+            
+            # 1. Calcular altura necesaria para la NOTA (columna más ancha y variable)
+            # FPDF MultiCell simulación para obtener altura
+            x_curr = pdf.get_x()
+            y_curr = pdf.get_y()
+            
+            # Simulamos impresión de la nota para ver cuánto ocupa verticalmente
+            pdf.set_xy(x_curr + 85, y_curr) # Posición columna Notas (25+60 offset)
+            pdf.multi_cell(105, 5, txt_nota, 0, 'L') # Altura de línea 5
+            y_end = pdf.get_y()
+            h_row = y_end - y_curr
+            
+            # Altura mínima de 6mm si el texto es muy corto
+            if h_row < 6: h_row = 6
+            
+            # 2. Verificar Salto de Página
+            if y_curr + h_row > 270: 
+                pdf.add_page()
+                y_curr = pdf.get_y()
+                # Reimprimir headers en nueva página
+                pdf.set_font('Arial', 'B', 8)
+                pdf.cell(25, 6, "FECHA", 1, 0, 'C')
+                pdf.cell(60, 6, "TRATAMIENTO", 1, 0, 'C')
+                pdf.cell(105, 6, "NOTAS / EVOLUCIÓN", 1, 1, 'C')
+                pdf.set_font('Arial', '', 8)
+                y_curr = pdf.get_y()
+
+            # 3. Dibujar Celdas con altura unificada
+            pdf.set_xy(x_curr, y_curr) # Volver al inicio de fila
+            
+            # Fecha (Centrado vertical manual si se desea, o top align)
+            pdf.rect(x_curr, y_curr, 25, h_row) # Borde
+            pdf.set_xy(x_curr, y_curr)
+            pdf.multi_cell(25, 5, txt_fecha, 0, 'C') # Contenido
+            
+            # Tratamiento
+            pdf.rect(x_curr + 25, y_curr, 60, h_row) # Borde
+            pdf.set_xy(x_curr + 25, y_curr)
+            pdf.multi_cell(60, 5, txt_trat, 0, 'L') # Contenido
+            
+            # Notas (Ya sabemos que cabe)
+            pdf.rect(x_curr + 85, y_curr, 105, h_row) # Borde
+            pdf.set_xy(x_curr + 85, y_curr)
+            pdf.multi_cell(105, 5, txt_nota, 0, 'L') # Contenido real
+            
+            # 4. Mover cursor para siguiente fila
+            pdf.set_xy(x_curr, y_curr + h_row)
             
     val = pdf.output(dest='S'); return val.encode('latin-1') if isinstance(val, str) else bytes(val)
 
@@ -475,9 +531,11 @@ def vista_consultorio():
                             elif p_sel != "Seleccionar...":
                                 id_p = p_sel.split(" - ")[0]; nom_p = p_sel.split(" - ")[1]
                                 c = conn.cursor()
+                                # [FIX V25.2] LIMPIEZA DE NOTAS AL AGENDAR (NO RIESGOS)
+                                nota_final = sanitizar(m_sel) # Solo motivo/nota usuario
                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, monto_pagado, saldo_pendiente, estado_pago, precio_lista, precio_final, porcentaje, tiene_factura, iva, subtotal, metodo_pago, requiere_factura, notas, fecha_pago, costo_laboratorio, categoria) 
                                                                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                                         (int(time.time()), fecha_ver_str, h_sel, id_p, nom_p, "General", sanitizar(m_sel), d_sel, 0, 0, "Pendiente", 0, 0, 0, "No", 0, 0, "", "No", "", "", 0, "General"))
+                                         (int(time.time()), fecha_ver_str, h_sel, id_p, nom_p, "General", sanitizar(m_sel), d_sel, 0, 0, "Pendiente", 0, 0, 0, "No", 0, 0, "", "No", nota_final, "", 0, "General"))
                                 conn.commit(); st.success(f"Agendado"); time.sleep(1); st.rerun()
                             else: st.error("Seleccione paciente")
 
@@ -544,7 +602,6 @@ def vista_consultorio():
         with tab_b:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
-                # [FIX V25.0] SELECTOR ESTANDARIZADO
                 lista_busqueda = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 seleccion = st.selectbox("Seleccionar:", ["..."] + lista_busqueda)
                 if seleccion != "...":
@@ -562,7 +619,6 @@ def vista_consultorio():
                             st.download_button("📥 Bajar PDF", pdf_bytes, clean_name, "application/pdf")
                     with c_hist:
                         st.markdown("#### 📜 Notas")
-                        # [FIX V25.1] TABLA NOTAS: CONSECUTIVO Y ANCHO
                         if not hist_notas.empty:
                             df_notes = hist_notas[['fecha', 'tratamiento', 'notas']].copy()
                             df_notes.index = range(1, len(df_notes) + 1)
@@ -571,7 +627,7 @@ def vista_consultorio():
                             st.dataframe(
                                 df_notes,
                                 use_container_width=True,
-                                hide_index=False, # Mostrar índice (consecutivo)
+                                hide_index=False,
                                 column_config={
                                     "CONSECUTIVO": st.column_config.NumberColumn("CONSECUTIVO", width="small"),
                                     "NOTAS": st.column_config.TextColumn("NOTAS", width="large")
@@ -622,7 +678,6 @@ def vista_consultorio():
         with tab_e:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
-                # [FIX V25.0] SELECTOR ESTANDARIZADO
                 lista_edit = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 sel_edit = st.selectbox("Buscar Paciente:", ["Select..."] + lista_edit)
                 if sel_edit != "Select...":
@@ -653,7 +708,6 @@ def vista_consultorio():
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         if not pacientes.empty:
-            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]
             st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
@@ -664,7 +718,6 @@ def vista_consultorio():
                 if deuda > 0: c2.error("PENDIENTE") 
                 else: c2.success("AL CORRIENTE")
                 
-                # [FIX V25.1] TABLA FINANZAS: MAYÚSCULAS Y CONSECUTIVO CENTRADO
                 df_show = df_f[['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente']].reset_index(drop=True)
                 df_show.index = df_show.index + 1
                 df_show.index.name = 'CONSECUTIVO'
@@ -700,7 +753,8 @@ def vista_consultorio():
                     else:
                         estatus = "Pagado" if saldo <= 0 else "Pendiente"
                         c = conn.cursor()
-                        nota_final = f"{sanitizar(notas)} | RIESGO: {riesgo_auto}"
+                        # [FIX V25.2] LIMPIEZA DE NOTAS (DB FIX)
+                        nota_final = sanitizar(notas)
                         c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                  (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, abono, saldo, get_fecha_mx(), costo_lab))
                         if agendar:
@@ -711,13 +765,11 @@ def vista_consultorio():
     elif menu == "4. Documentos & Firmas":
         st.title("⚖️ Centro Legal"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
         if not df_p.empty:
-            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", ["..."]+df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             if sel != "...":
                 id_target = sel.split(" - ")[0]; p_obj = df_p[df_p['id_paciente'] == id_target].iloc[0]
                 tipo_doc = st.selectbox("Documento", ["Consentimiento Informado", "Aviso de Privacidad"])
                 
-                # [FIX V25.0] VARIABLES DE TESTIGOS SIEMPRE INICIALIZADAS (EVITA CRASH)
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK" 
