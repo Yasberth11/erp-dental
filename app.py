@@ -30,14 +30,8 @@ DOCS_INFO = {
 }
 
 # LISTAS MAESTRAS
-LISTA_OCUPACIONES = [
-    "Estudiante", "Empleado/a", "Empresario/a", "Hogar", "Comerciante", 
-    "Docente", "Sector Salud", "Jubilado/a", "Desempleado/a", "Otro"
-]
-
-LISTA_PARENTESCOS = [
-    "Madre", "Padre", "Abuelo(a)", "Tío(a)", "Hermano(a) Mayor", "Tutor Legal Designado", "Otro"
-]
+LISTA_OCUPACIONES = ["Estudiante", "Empleado/a", "Empresario/a", "Hogar", "Comerciante", "Docente", "Sector Salud", "Jubilado/a", "Desempleado/a", "Otro"]
+LISTA_PARENTESCOS = ["Madre", "Padre", "Abuelo(a)", "Tío(a)", "Hermano(a) Mayor", "Tutor Legal Designado", "Otro"]
 
 # TEXTOS JURÍDICOS
 CLAUSULA_CIERRE = "Adicionalmente, entiendo que pueden presentarse eventos imprevisibles en cualquier acto médico, tales como: reacciones alérgicas a los anestésicos o materiales (incluso si no tengo antecedentes conocidos), síncope (desmayo), trismus (dificultad para abrir la boca), hematomas, o infecciones secundarias. Acepto que el éxito del tratamiento depende también de mi biología y de seguir estrictamente las indicaciones post-operatorias."
@@ -79,11 +73,13 @@ def cargar_estilo_royal():
         <style>
         .stApp { background-color: #F4F6F6; }
         .royal-card { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid #D4AF37; margin-bottom: 20px; }
+        .sticky-header { position: fixed; top: 0; left: 0; width: 100%; z-index: 999; background-color: #002B5B; color: white; padding: 10px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .alerta-roja { background-color: #D32F2F; color: white; padding: 5px 10px; border-radius: 5px; font-weight: bold; margin-left: 10px; animation: parpadeo 2s infinite; }
+        @keyframes parpadeo { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         h1, h2, h3, h4 { color: #002B5B !important; font-family: 'Helvetica Neue', sans-serif; }
         .stButton>button { background-color: #D4AF37; color: #002B5B; border: none; font-weight: bold; width: 100%; transition: all 0.3s; }
         .stButton>button:hover { background-color: #B5952F; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
         input[type=number] { text-align: right; }
-        .alerta-medica { background-color: #ffebee; color: #c62828; padding: 10px; border-radius: 5px; border: 1px solid #ef9a9a; font-weight: bold; }
         div[data-testid="column"] { display: flex; flex-direction: column; justify-content: flex-end; }
         #MainMenu {visibility: hidden;} footer {visibility: hidden;}
         </style>
@@ -104,10 +100,8 @@ def get_db_connection():
 def migrar_tablas():
     conn = get_db_connection()
     c = conn.cursor()
-    for col in ['parentesco_tutor', 'telefono_emergencia']:
-        try: c.execute(f"ALTER TABLE pacientes ADD COLUMN {col} TEXT")
-        except: pass
-    for col in ['antecedentes_medicos', 'ahf', 'app', 'apnp', 'sexo', 'domicilio', 'tutor', 'contacto_emergencia', 'ocupacion', 'estado_civil', 'motivo_consulta', 'exploracion_fisica', 'diagnostico']:
+    # Actualización masiva de columnas
+    for col in ['parentesco_tutor', 'telefono_emergencia', 'antecedentes_medicos', 'ahf', 'app', 'apnp', 'sexo', 'domicilio', 'tutor', 'contacto_emergencia', 'ocupacion', 'estado_civil', 'motivo_consulta', 'exploracion_fisica', 'diagnostico']:
         try: c.execute(f"ALTER TABLE pacientes ADD COLUMN {col} TEXT")
         except: pass
     for col in ['costo_laboratorio', 'categoria']:
@@ -169,6 +163,7 @@ def seed_data():
     c = conn.cursor()
     c.execute("SELECT count(*) FROM servicios")
     if c.fetchone()[0] == 0:
+        # Carga de datos base (Simplificada para no repetir bloques enormes, lógica idéntica a v29)
         tratamientos = [("Preventiva", "Profilaxis (Limpieza Ultrasónica)", 600.0, 0.0),("Preventiva", "Aplicación de Flúor (Niños)", 350.0, 0.0),("Preventiva", "Sellador de Fosetas y Fisuras", 400.0, 0.0),("Operatoria", "Resina Simple (1 cara)", 800.0, 0.0),("Operatoria", "Resina Compuesta (2 o más caras)", 1200.0, 0.0),("Operatoria", "Reconstrucción de Muñón", 1500.0, 0.0),("Operatoria", "Curación Temporal (Cavit)", 300.0, 0.0),("Cirugía", "Extracción Simple", 900.0, 0.0),("Cirugía", "Cirugía de Tercer Molar (Muela del Juicio)", 3500.0, 0.0),("Cirugía", "Drenaje de Absceso", 800.0, 0.0),("Endodoncia", "Endodoncia Anterior (1 conducto)", 2800.0, 0.0),("Endodoncia", "Endodoncia Premolar (2 conductos)", 3200.0, 0.0),("Endodoncia", "Endodoncia Molar (3+ conductos)", 4200.0, 0.0),("Prótesis Fija", "Corona Zirconia", 4800.0, 900.0),("Prótesis Fija", "Corona Metal-Porcelana", 3500.0, 600.0),("Prótesis Fija", "Incrustación Estética", 3800.0, 700.0),("Prótesis Fija", "Carilla de Porcelana", 5500.0, 1100.0),("Prótesis Fija", "Poste de Fibra de Vidrio", 1200.0, 0.0),("Prótesis Removible", "Placa Total (Acrílico) - Una arcada", 6000.0, 1200.0),("Prótesis Removible", "Prótesis Flexible (Valplast) - Unilateral", 4500.0, 900.0),("Estética", "Blanqueamiento (Consultorio 2 sesiones)", 3500.0, 300.0),("Estética", "Blanqueamiento (Guardas en casa)", 2500.0, 500.0),("Ortodoncia", "Pago Inicial (Brackets Metálicos)", 4000.0, 1500.0),("Ortodoncia", "Mensualidad Ortodoncia", 700.0, 0.0),("Ortodoncia", "Recolocación de Bracket (Reposición)", 200.0, 0.0),("Pediatría", "Pulpotomía", 1500.0, 0.0),("Pediatría", "Corona Acero-Cromo", 1800.0, 0.0),("Garantía", "Garantía (Retoque/Reparación)", 0.0, 0.0)]
         c.executemany("INSERT INTO servicios (categoria, nombre_tratamiento, precio_lista, costo_laboratorio_base) VALUES (?,?,?,?)", tratamientos)
         conn.commit()
@@ -177,7 +172,7 @@ def seed_data():
 init_db(); migrar_tablas(); seed_data(); actualizar_niveles_riesgo()
 
 # ==========================================
-# 3. HELPERS Y FUNCIONES DE FORMATO
+# 3. HELPERS Y FUNCIONES
 # ==========================================
 def get_fecha_mx(): return datetime.now(TZ_MX).strftime("%d/%m/%Y")
 def get_hora_mx(): return datetime.now(TZ_MX).strftime("%H:%M:%S")
@@ -186,8 +181,7 @@ def format_date_latino(date_obj): return date_obj.strftime("%d/%m/%Y")
 def formato_nombre_legal(texto):
     if not texto: return ""
     texto = str(texto).upper().strip()
-    for old, new in {'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U','Ü':'U','Ñ':'N'}.items(): 
-        texto = texto.replace(old, new)
+    for old, new in {'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U','Ü':'U','Ñ':'N'}.items(): texto = texto.replace(old, new)
     return " ".join(texto.split())
 
 def formato_titulo(texto):
@@ -304,7 +298,8 @@ def procesar_firma_digital(firma_img_data):
         return temp_filename
     except: return None
 
-def crear_pdf_consentimiento(paciente_full, nombre_doctor, cedula_doctor, tipo_doc, tratamientos_str, riesgos_str, firma_pac, firma_doc, testigos_data, nivel_riesgo):
+# [MODIFICADO V30.0] Soporte para firma tutor + edad
+def crear_pdf_consentimiento(paciente_full, nombre_doctor, cedula_doctor, tipo_doc, tratamientos_str, riesgos_str, firma_pac, firma_doc, testigos_data, nivel_riesgo, edad_paciente, tutor_info):
     pdf = PDFGenerator(); pdf.add_page()
     fecha_hoy = get_fecha_mx()
     paciente_full = formato_nombre_legal(paciente_full)
@@ -359,8 +354,14 @@ AUTORIZACIÓN: Autorizo la anestesia local y procedimientos necesarios, asumiend
     y_firmas = pdf.get_y()
     
     pdf.set_font('Arial', 'B', 8)
-    pdf.text(20, y_firmas + 40, "FIRMA DEL PACIENTE / TUTOR RESPONSABLE")
-    pdf.text(20, y_firmas + 45, paciente_full) 
+    
+    # [LOGICA FIRMA PEDIATRICA]
+    if edad_paciente < 18:
+        pdf.text(20, y_firmas + 40, f"FIRMA DEL TUTOR: {tutor_info.get('nombre', '')} ({tutor_info.get('relacion', '')})")
+        pdf.text(20, y_firmas + 45, f"En representación de: {paciente_full}")
+    else:
+        pdf.text(20, y_firmas + 40, "FIRMA DEL PACIENTE")
+        pdf.text(20, y_firmas + 45, paciente_full) 
     
     if firma_pac:
         f_path = procesar_firma_digital(firma_pac)
@@ -472,6 +473,7 @@ def crear_pdf_historia(p, historial):
 # 5. SISTEMA DE LOGIN
 # ==========================================
 if 'perfil' not in st.session_state: st.session_state.perfil = None
+if 'id_paciente_activo' not in st.session_state: st.session_state.id_paciente_activo = None
 
 def pantalla_login():
     col_izq, col_centro, col_der = st.columns([1, 2, 1])
@@ -485,10 +487,34 @@ def pantalla_login():
             elif tipo == "💼 ADMINISTRACIÓN" and pwd == "ROYALADMIN": st.session_state.perfil = "Administracion"; st.rerun()
             else: st.error("Acceso Denegado")
 
+# [NUEVO V30.0] HEADER FIJO CON CONTEXTO
+def render_header(conn):
+    if st.session_state.id_paciente_activo:
+        try:
+            p = pd.read_sql(f"SELECT * FROM pacientes WHERE id_paciente='{st.session_state.id_paciente_activo}'", conn).iloc[0]
+            edad, _ = calcular_edad_completa(p['fecha_nacimiento'])
+            
+            # Detectar Alergias (APP)
+            alergias = p['app'] if p['app'] and len(p['app']) > 3 else "Negados"
+            bg_color = "#D32F2F" if len(alergias) > 10 else "#002B5B" # Rojo si hay texto largo (sospecha alergia)
+            
+            st.markdown(f"""
+            <div class="sticky-header" style="background-color: {bg_color};">
+                <span style="font-size:1.2em; font-weight:bold;">👤 {p['nombre']} {p['apellido_paterno']}</span> | 
+                <span>🎂 {edad} Años</span> | 
+                <span>⚠️ APP: {alergias}</span>
+            </div>
+            <div style="margin-bottom: 60px;"></div> 
+            """, unsafe_allow_html=True)
+        except: pass
+
 # ==========================================
 # 6. VISTA CONSULTORIO
 # ==========================================
 def vista_consultorio():
+    conn = get_db_connection()
+    render_header(conn) # Renderizar barra superior
+    
     if os.path.exists(LOGO_FILE): st.sidebar.image(LOGO_FILE, use_column_width=True)
     st.sidebar.markdown("### 🏥 Royal Dental")
     st.sidebar.caption(f"Fecha: {get_fecha_mx()}")
@@ -506,7 +532,6 @@ def vista_consultorio():
             except Exception as e: st.error(f"Error crítico: {e}")
 
     if st.sidebar.button("Cerrar Sesión"): st.session_state.perfil = None; st.rerun()
-    conn = get_db_connection()
 
     if menu == "1. Agenda & Citas":
         st.title("📅 Agenda")
@@ -609,11 +634,14 @@ def vista_consultorio():
         with tab_b:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
-                # [FIX V25.0] SELECTOR ESTANDARIZADO
                 lista_busqueda = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 seleccion = st.selectbox("Seleccionar:", ["..."] + lista_busqueda)
+                
                 if seleccion != "...":
                     id_sel_str = seleccion.split(" - ")[0]; p_data = pacientes_raw[pacientes_raw['id_paciente'] == id_sel_str].iloc[0]
+                    # [V30.0] ACTIVAR PACIENTE EN SESION PARA STICKY HEADER
+                    st.session_state.id_paciente_activo = id_sel_str
+                    
                     edad, tipo_pac = calcular_edad_completa(p_data.get('fecha_nacimiento', ''))
                     antecedentes = p_data.get('app', '') 
                     if antecedentes: st.markdown(f"<div class='alerta-medica'>⚠️ ALERTA: {antecedentes}</div><br>", unsafe_allow_html=True)
@@ -654,7 +682,6 @@ def vista_consultorio():
                 materno = c3.text_input("A. Materno")
                 
                 c4, c5, c6 = st.columns(3)
-                # [FIX V29.0] FECHA DEFAULT HOY (Evita error 0 años) y EMOJI REMOVIDO
                 nacimiento = c4.date_input("Fecha de Nacimiento", min_value=datetime(1920,1,1), max_value=datetime.now(TZ_MX).date(), value=datetime.now(TZ_MX).date())
                 sexo = c5.selectbox("Sexo", ["Masculino", "Femenino"])
                 ocupacion = c6.selectbox("Ocupación", LISTA_OCUPACIONES)
@@ -666,12 +693,11 @@ def vista_consultorio():
                 estado_civil = ce3.selectbox("Estado Civil", ["Soltero", "Casado", "Divorciado", "Viudo", "Unión Libre"])
                 domicilio = st.text_input("Domicilio Completo")
 
-                # [FIX V29.0] CÁLCULO DE EDAD ROBUSTO Y SIN EMOJI
+                # VALIDACION VISUAL DE MENORES
                 edad_calc = 0
                 if nacimiento:
-                    hoy = datetime.now(TZ_MX).date()
-                    nac_date = nacimiento
-                    edad_calc = hoy.year - nac_date.year - ((hoy.month, hoy.day) < (nac_date.month, nac_date.day))
+                    hoy = datetime.now().date()
+                    edad_calc = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
                 
                 if edad_calc < 18:
                     st.info(f"Paciente menor de edad ({edad_calc} años). Tutor obligatorio.")
@@ -686,7 +712,6 @@ def vista_consultorio():
                 contacto_emer_nom = cem1.text_input("Nombre Contacto Emergencia")
                 contacto_emer_tel = cem2.text_input("Tel Emergencia (10)", max_chars=10)
                 
-                # [FIX V28.0] REINTEGRACIÓN DEL CAMPO MOTIVO DE CONSULTA
                 motivo_consulta = st.text_area("Motivo de Consulta*")
 
                 st.markdown("**Historia Médica**")
@@ -694,7 +719,6 @@ def vista_consultorio():
                 st.markdown("**Exploración y Diagnóstico (Dr)**")
                 exploracion = st.text_area("Exploración Física"); diagnostico = st.text_area("Diagnóstico Presuntivo")
                 
-                # [FIX V27.1] DATOS FISCALES CON HOMOCLAVE
                 rfc_final = "" 
                 regimen = ""
                 uso_cfdi = ""
@@ -719,17 +743,13 @@ def vista_consultorio():
                         st.error("Teléfono Emergencia incorrecto"); st.stop()
                     if not nombre or not paterno: st.error("Nombre incompleto"); st.stop()
                     
-                    # [FIX V29.0] HARD STOP MENORES
                     if edad_calc < 18:
                         if not tutor or not parentesco:
-                            st.error("⛔ ERROR: El paciente es menor de edad. El campo 'Nombre Tutor' es obligatorio."); st.stop()
+                            st.error("⛔ ERROR: Para menores de 18 años, el Nombre del Tutor y Parentesco son OBLIGATORIOS."); st.stop()
 
-                    # [FIX V27.1] LOGICA HIBRIDA RFC
                     if rfc_base:
-                        # Manual: Concatenar lo que haya
                         rfc_final = formato_nombre_legal(rfc_base) + formato_nombre_legal(homoclave)
                     else:
-                        # Automático: Calcular Base + (Homoclave Manual o XXX)
                         base_10 = calcular_rfc_10(nombre, paterno, materno, nacimiento)
                         homo_sufijo = formato_nombre_legal(homoclave) if homoclave else "XXX"
                         rfc_final = base_10 + homo_sufijo
@@ -743,7 +763,6 @@ def vista_consultorio():
         with tab_e:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
-                # [FIX V25.0] SELECTOR ESTANDARIZADO
                 lista_edit = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
                 sel_edit = st.selectbox("Buscar Paciente:", ["Select..."] + lista_edit)
                 if sel_edit != "Select...":
@@ -778,9 +797,12 @@ def vista_consultorio():
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         if not pacientes.empty:
-            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]
+            
+            # [V30.0] ACTIVAR PACIENTE EN SESION
+            st.session_state.id_paciente_activo = id_p
+            
             st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
             df_f = pd.read_sql(f"SELECT * FROM citas WHERE id_paciente='{id_p}' AND estado_pago != 'CANCELADO' AND (precio_final > 0 OR monto_pagado > 0)", conn)
             if not df_f.empty:
@@ -819,12 +841,15 @@ def vista_consultorio():
                 doc_name = st.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"]); metodo = st.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia", "Garantía", "Pendiente de Pago"])
                 notas = st.text_area("Notas Evolución"); agendar = st.checkbox("¿Agendar Cita?"); f_cita = st.date_input("Fecha"); h_cita = st.selectbox("Hora", generar_slots_tiempo())
                 if st.form_submit_button("Registrar"):
+                    # [V30.0] VALIDACION DE NOTA VACIA
+                    if not notas.strip():
+                         st.warning("⚠️ Guardando sin nota de evolución. Se recomienda documentar el procedimiento.")
+                    
                     ocupado = verificar_disponibilidad(format_date_latino(f_cita), h_cita) if agendar else False
                     if ocupado: st.error("Horario Ocupado.")
                     else:
                         estatus = "Pagado" if saldo <= 0 else "Pendiente"
                         c = conn.cursor()
-                        # [FIX V25.2] LIMPIEZA DE NOTAS (DB FIX)
                         nota_final = formato_oracion(notas)
                         c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                  (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, abono, saldo, get_fecha_mx(), costo_lab))
@@ -836,13 +861,15 @@ def vista_consultorio():
     elif menu == "4. Documentos & Firmas":
         st.title("⚖️ Centro Legal"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
         if not df_p.empty:
-            # [FIX V25.0] SELECTOR ESTANDARIZADO
             sel = st.selectbox("Paciente:", ["..."]+df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             if sel != "...":
                 id_target = sel.split(" - ")[0]; p_obj = df_p[df_p['id_paciente'] == id_target].iloc[0]
+                
+                # [V30.0] ACTIVAR PACIENTE EN SESION
+                st.session_state.id_paciente_activo = id_target
+                
                 tipo_doc = st.selectbox("Documento", ["Consentimiento Informado", "Aviso de Privacidad"])
                 
-                # [FIX V25.0] VARIABLES DE TESTIGOS SIEMPRE INICIALIZADAS (EVITA CRASH)
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK" 
@@ -850,7 +877,6 @@ def vista_consultorio():
                 img_t1 = None; img_t2 = None
                 
                 if "Consentimiento" in tipo_doc:
-                    # BUSCAR TRATAMIENTOS DE HOY
                     hoy_str = get_fecha_mx()
                     citas_hoy = pd.read_sql(f"SELECT * FROM citas WHERE id_paciente='{id_target}' AND fecha='{hoy_str}' AND (precio_final > 0 OR monto_pagado > 0)", conn)
                     
@@ -938,7 +964,11 @@ def vista_consultorio():
                             
                             testigos_dict = {'n1': t1_name, 'n2': t2_name, 'img_t1': img_t1, 'img_t2': img_t2}
                             
-                            pdf_bytes = crear_pdf_consentimiento(nombre_paciente_full, doc_full, cedula_full, tipo_doc, tratamiento_legal, riesgo_legal, img_pac, img_doc, testigos_dict, nivel_riesgo)
+                            # [V30.0] DATOS TUTOR PARA PDF
+                            edad_actual, _ = calcular_edad_completa(p_obj['fecha_nacimiento'])
+                            tutor_info = {'nombre': p_obj.get('tutor', ''), 'relacion': p_obj.get('parentesco_tutor', '')}
+                            
+                            pdf_bytes = crear_pdf_consentimiento(nombre_paciente_full, doc_full, cedula_full, tipo_doc, tratamiento_legal, riesgo_legal, img_pac, img_doc, testigos_dict, nivel_riesgo, edad_actual, tutor_info)
                             
                             prefix = "CONSENTIMIENTO" if "Consentimiento" in tipo_doc else "AVISO_PRIVACIDAD"
                             clean_filename = f"{prefix}_{formato_nombre_legal(p_obj['nombre'])}_{formato_nombre_legal(p_obj['apellido_paterno'])}.pdf".replace(" ", "_")
