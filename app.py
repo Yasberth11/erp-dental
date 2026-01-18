@@ -14,6 +14,7 @@ from fpdf import FPDF
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 import os
+import shutil
 
 # ==========================================
 # 1. CONFIGURACIÓN Y SISTEMA DE ARCHIVOS
@@ -44,7 +45,7 @@ DOCS_INFO = {
         "especialidad": "Cirujano Dentista"
     }
 }
-# Lista ordenada para Dropdowns
+# Lista para Dropdowns (Mónica First)
 LISTA_DOCTORES = ["Dra. Mónica", "Dr. Emmanuel"]
 
 # LISTAS MAESTRAS
@@ -194,20 +195,27 @@ def seed_data():
     c = conn.cursor()
     c.execute("SELECT count(*) FROM servicios")
     if c.fetchone()[0] == 0:
-        tratamientos = [("Preventiva", "Profilaxis (Limpieza Ultrasónica)", 600.0, 0.0),("Preventiva", "Aplicación de Flúor (Niños)", 350.0, 0.0),("Preventiva", "Sellador de Fosetas y Fisuras", 400.0, 0.0),("Operatoria", "Resina Simple (1 cara)", 800.0, 0.0),("Operatoria", "Resina Compuesta (2 o más caras)", 1200.0, 0.0),("Operatoria", "Reconstrucción de Muñón", 1500.0, 0.0),("Operatoria", "Curación Temporal (Cavit)", 300.0, 0.0),("Cirugía", "Extracción Simple", 900.0, 0.0),("Cirugía", "Cirugía de Tercer Molar (Muela del Juicio)", 3500.0, 0.0),("Cirugía", "Drenaje de Absceso", 800.0, 0.0),("Endodoncia", "Endodoncia Anterior (1 conducto)", 2800.0, 0.0),("Endodoncia", "Endodoncia Premolar (2 conductos)", 3200.0, 0.0),("Endodoncia", "Endodoncia Molar (3+ conductos)", 4200.0, 0.0),("Prótesis Fija", "Corona Zirconia", 4800.0, 900.0),("Prótesis Fija", "Corona Metal-Porcelana", 3500.0, 600.0),("Prótesis Fija", "Incrustación Estética", 3800.0, 700.0),("Prótesis Fija", "Carilla de Porcelana", 5500.0, 1100.0),("Prótesis Fija", "Poste de Fibra de Vidrio", 1200.0, 0.0),("Prótesis Removible", "Placa Total (Acrílico) - Una arcada", 6000.0, 1200.0),("Prótesis Removible", "Prótesis Flexible (Valplast) - Unilateral", 4500.0, 900.0),("Estética", "Blanqueamiento (Consultorio 2 sesiones)", 3500.0, 300.0),("Estética", "Blanqueamiento (Guardas en casa)", 2500.0, 500.0),("Ortodoncia", "Pago Inicial (Brackets Metálicos)", 4000.0, 1500.0),("Ortodoncia", "Mensualidad Ortodoncia", 700.0, 0.0),("Ortodoncia", "Recolocación de Bracket (Reposición)", 200.0, 0.0),("Pediatría", "Pulpotomía", 1500.0, 0.0),("Pediatría", "Corona Acero-Cromo", 1800.0, 0.0),("Garantía", "Garantía (Retoque/Reparación)", 0.0, 0.0)]
-        c.executemany("INSERT INTO servicios (categoria, nombre_tratamiento, precio_lista, costo_laboratorio_base) VALUES (?,?,?,?)", tratamientos)
+        # Tratamientos y duraciones por defecto
+        tratamientos = [("Preventiva", "Profilaxis (Limpieza Ultrasónica)", 600.0, 0.0, 'LOW_RISK', 30),("Preventiva", "Aplicación de Flúor (Niños)", 350.0, 0.0, 'LOW_RISK', 30),("Preventiva", "Sellador de Fosetas y Fisuras", 400.0, 0.0, 'LOW_RISK', 30),("Operatoria", "Resina Simple (1 cara)", 800.0, 0.0, 'LOW_RISK', 45),("Operatoria", "Resina Compuesta (2 o más caras)", 1200.0, 0.0, 'LOW_RISK', 60),("Operatoria", "Reconstrucción de Muñón", 1500.0, 0.0, 'LOW_RISK', 60),("Operatoria", "Curación Temporal (Cavit)", 300.0, 0.0, 'LOW_RISK', 30),("Cirugía", "Extracción Simple", 900.0, 0.0, 'HIGH_RISK', 60),("Cirugía", "Cirugía de Tercer Molar (Muela del Juicio)", 3500.0, 0.0, 'HIGH_RISK', 90),("Cirugía", "Drenaje de Absceso", 800.0, 0.0, 'HIGH_RISK', 45),("Endodoncia", "Endodoncia Anterior (1 conducto)", 2800.0, 0.0, 'HIGH_RISK', 90),("Endodoncia", "Endodoncia Premolar (2 conductos)", 3200.0, 0.0, 'HIGH_RISK', 90),("Endodoncia", "Endodoncia Molar (3+ conductos)", 4200.0, 0.0, 'HIGH_RISK', 120),("Prótesis Fija", "Corona Zirconia", 4800.0, 900.0, 'HIGH_RISK', 90),("Prótesis Fija", "Corona Metal-Porcelana", 3500.0, 600.0, 'HIGH_RISK', 90),("Prótesis Fija", "Incrustación Estética", 3800.0, 700.0, 'HIGH_RISK', 90),("Prótesis Fija", "Carilla de Porcelana", 5500.0, 1100.0, 'HIGH_RISK', 90),("Prótesis Fija", "Poste de Fibra de Vidrio", 1200.0, 0.0, 'HIGH_RISK', 60),("Prótesis Removible", "Placa Total (Acrílico) - Una arcada", 6000.0, 1200.0, 'LOW_RISK', 30),("Prótesis Removible", "Prótesis Flexible (Valplast) - Unilateral", 4500.0, 900.0, 'LOW_RISK', 30),("Estética", "Blanqueamiento (Consultorio 2 sesiones)", 3500.0, 300.0, 'LOW_RISK', 90),("Estética", "Blanqueamiento (Guardas en casa)", 2500.0, 500.0, 'LOW_RISK', 30),("Ortodoncia", "Pago Inicial (Brackets Metálicos)", 4000.0, 1500.0, 'HIGH_RISK', 60),("Ortodoncia", "Mensualidad Ortodoncia", 700.0, 0.0, 'NO_CONSENT', 30),("Ortodoncia", "Recolocación de Bracket (Reposición)", 200.0, 0.0, 'NO_CONSENT', 30),("Pediatría", "Pulpotomía", 1500.0, 0.0, 'HIGH_RISK', 60),("Pediatría", "Corona Acero-Cromo", 1800.0, 0.0, 'HIGH_RISK', 60),("Garantía", "Garantía (Retoque/Reparación)", 0.0, 0.0, 'NO_CONSENT', 30)]
+        c.executemany("INSERT INTO servicios (categoria, nombre_tratamiento, precio_lista, costo_laboratorio_base, consent_level, duracion) VALUES (?,?,?,?,?,?)", tratamientos)
         conn.commit()
     conn.close()
 
 init_db(); migrar_tablas(); seed_data()
 
 # ==========================================
-# 4. HELPERS
+# 3. HELPERS (FUNCIONES DE AYUDA RESTAURADAS)
 # ==========================================
 def get_fecha_mx(): return datetime.now(TZ_MX).strftime("%d/%m/%Y")
 def format_date_latino(date_obj): return date_obj.strftime("%d/%m/%Y")
 def formato_nombre_legal(texto): return " ".join(str(texto).upper().strip().split()) if texto else ""
 def formato_oracion(texto): return str(texto).strip().capitalize() if texto else ""
+def limpiar_email(texto): return texto.lower().strip() if texto else ""
+
+def format_tel_visual(tel): 
+    # [V42.1] Restaurada
+    return f"{tel[:2]}-{tel[2:6]}-{tel[6:]}" if tel and len(tel)==10 else tel
+
 def calcular_edad_completa(nacimiento_input):
     hoy = datetime.now().date()
     try:
@@ -216,12 +224,29 @@ def calcular_edad_completa(nacimiento_input):
         edad = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
         return edad, "MENOR" if edad < 18 else "ADULTO"
     except: return 0, "N/A"
+
+def generar_id_unico(nombre, paterno, nacimiento):
+    try:
+        nombre = formato_nombre_legal(nombre); paterno = formato_nombre_legal(paterno)
+        part1 = paterno[:3] if len(paterno) >=3 else paterno + "X"; part2 = nombre[0]; part3 = str(nacimiento.year)
+        random_chars = ''.join(random.choices(string.ascii_uppercase + string.digits, k=3))
+        return f"{part1}{part2}-{part3}-{random_chars}"
+    except: return f"P-{int(time.time())}"
+
 def formatear_telefono_db(numero): return re.sub(r'\D', '', str(numero))
 
 def generar_slots_tiempo():
     slots = []; h = datetime.strptime("08:00", "%H:%M"); end = datetime.strptime("18:00", "%H:%M")
     while h <= end: slots.append(h.strftime("%H:%M")); h += timedelta(minutes=30)
     return slots
+
+def get_regimenes_fiscales(): 
+    # [V42.1] Restaurada
+    return ["605 - Sueldos y Salarios", "612 - PFAEP (Actividad Empresarial)", "626 - RESICO", "616 - Sin obligaciones fiscales", "601 - General de Ley Personas Morales"]
+
+def get_usos_cfdi(): 
+    # [V42.1] Restaurada
+    return ["D01 - Honorarios médicos, dentales", "S01 - Sin efectos fiscales", "G03 - Gastos en general", "CP01 - Pagos"]
 
 def verificar_disponibilidad(fecha, hora, duracion=30):
     conn = get_db_connection(); c = conn.cursor()
@@ -238,12 +263,54 @@ def verificar_disponibilidad(fecha, hora, duracion=30):
         return False
     except: return True
 
+def calcular_rfc_10(nombre, paterno, materno, nacimiento):
+    try:
+        nombre = formato_nombre_legal(nombre); paterno = formato_nombre_legal(paterno); materno = formato_nombre_legal(materno)
+        fecha = datetime.strptime(str(nacimiento), "%Y-%m-%d")
+        letra1 = paterno[0]; vocales = [c for c in paterno[1:] if c in "AEIOU"]; letra2 = vocales[0] if vocales else "X"
+        letra3 = materno[0] if materno else "X"
+        nombres = nombre.split(); letra4 = nombres[1][0] if len(nombres) > 1 and nombres[0] in ["JOSE", "MARIA", "MA.", "MA", "J."] else nombre[0]
+        fecha_str = fecha.strftime("%y%m%d"); rfc_base = f"{letra1}{letra2}{letra3}{letra4}{fecha_str}".upper()
+        if rfc_base[:4] in ["PUTO", "PITO", "CULO", "MAME"]: rfc_base = f"{rfc_base[:3]}X{rfc_base[4:]}"
+        return rfc_base
+    except: return ""
+
+def registrar_auditoria(usuario, accion, detalle):
+    try:
+        conn = get_db_connection(); c = conn.cursor()
+        c.execute("INSERT INTO auditoria (fecha_evento, usuario, accion, detalle) VALUES (?,?,?,?)", (datetime.now(TZ_MX).strftime("%Y-%m-%d %H:%M:%S"), usuario, accion, formato_nombre_legal(detalle)))
+        conn.commit(); conn.close()
+    except: pass
+
+def registrar_movimiento(doctor, tipo):
+    conn = get_db_connection(); c = conn.cursor(); hoy = get_fecha_mx(); hora_actual = get_hora_mx()
+    try:
+        if tipo == "Entrada":
+            c.execute("SELECT * FROM asistencia WHERE doctor=? AND fecha=? AND hora_salida = ''", (doctor, hoy))
+            if c.fetchone(): return False, "Ya tienes una sesión abierta."
+            c.execute("INSERT INTO asistencia (fecha, doctor, hora_entrada, hora_salida, horas_totales, estado) VALUES (?,?,?,?,?,?)", (hoy, doctor, hora_actual, "", 0, "Pendiente"))
+            conn.commit(); return True, f"Entrada registrada: {hora_actual}"
+        elif tipo == "Salida":
+            c.execute("SELECT id_registro, hora_entrada FROM asistencia WHERE doctor=? AND fecha=? AND hora_salida = ''", (doctor, hoy))
+            row = c.fetchone()
+            if not row: return False, "No entrada abierta."
+            id_reg, h_ent = row; fmt = "%H:%M:%S"
+            try: tdelta = datetime.strptime(hora_actual, fmt) - datetime.strptime(h_ent, fmt)
+            except: tdelta = timedelta(0)
+            horas = round(tdelta.total_seconds() / 3600, 2)
+            c.execute("UPDATE asistencia SET hora_salida=?, horas_totales=?, estado=? WHERE id_registro=?", (hora_actual, horas, "Finalizado", id_reg))
+            conn.commit(); return True, f"Salida: {hora_actual} ({horas}h)"
+    except Exception as e: return False, str(e)
+    finally: conn.close()
+
 # [V41.0] GESTOR DE ODONTOGRAMA
 def actualizar_diente(id_paciente, diente):
     conn = get_db_connection(); c = conn.cursor()
+    # Ciclo de estados
     estados = ["Sano", "Caries", "Resina", "Ausente", "Corona"]
     c.execute("SELECT estado FROM odontograma WHERE id_paciente=? AND diente=?", (id_paciente, diente))
     row = c.fetchone(); estado_actual = row[0] if row else "Sano"
+    
     nuevo_estado = estados[(estados.index(estado_actual) + 1) % len(estados)]
     c.execute("INSERT OR REPLACE INTO odontograma (id_paciente, diente, estado, fecha_actualizacion) VALUES (?,?,?,?)", (id_paciente, diente, nuevo_estado, get_fecha_mx()))
     conn.commit(); conn.close()
@@ -260,7 +327,7 @@ class PDFGenerator(FPDF):
     def __init__(self): super().__init__()
     def header(self):
         # [V42.0] LOGOS AJUSTADOS
-        if os.path.exists(LOGO_FILE): self.image(LOGO_FILE, 10, 8, 50) # Logo Clínica Grande
+        if os.path.exists(LOGO_FILE): self.image(LOGO_FILE, 10, 8, 50) 
         if os.path.exists(LOGO_UNAM): self.image(LOGO_UNAM, 170, 8, 25) 
         self.set_font('Arial', 'B', 14); self.set_text_color(0, 43, 91)
         self.cell(0, 10, 'ROYAL DENTAL', 0, 1, 'C'); self.ln(1)
@@ -299,7 +366,7 @@ def crear_pdf_receta(datos):
     
     pdf.line(10, pdf.get_y()+2, 200, pdf.get_y()+2); pdf.ln(10)
     
-    # Datos Paciente
+    # Datos Paciente (FIX AÑOS)
     pdf.set_font('Arial', 'B', 10)
     pdf.cell(20, 6, "Paciente:", 0, 0); pdf.set_font('Arial', '', 10)
     pdf.cell(100, 6, datos['paciente_nombre'], 0, 0)
@@ -308,7 +375,12 @@ def crear_pdf_receta(datos):
     pdf.cell(30, 6, datos['fecha'], 0, 1)
     
     pdf.set_font('Arial', 'B', 10); pdf.cell(15, 6, "Edad:", 0, 0)
-    pdf.set_font('Arial', '', 10); pdf.cell(30, 6, f"{datos['edad']} anos", 0, 1)
+    # [V42.0] FIX ENCODING
+    edad_str = f"{datos['edad']} anos".encode('latin-1', 'replace').decode('latin-1') 
+    # Truco: Si FPDF sigue fallando, usamos 'anos'. Si soporta latin-1, usamos 'años'.
+    # Para seguridad maxima usamos 'anos' en este fix rapido, o encode.
+    # Intentaremos pasar string seguro.
+    pdf.set_font('Arial', '', 10); pdf.cell(30, 6, f"{datos['edad']} anos", 0, 1) 
     pdf.ln(10)
     
     # Cuerpo Receta
@@ -329,6 +401,7 @@ def crear_pdf_receta(datos):
     pdf.cell(0, 10, "INDICACIONES Y CUIDADOS POST-TRATAMIENTO", 0, 1, 'C')
     pdf.ln(5)
     
+    # Texto Indicaciones
     pdf.set_font('Arial', '', 10); pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 6, datos['indicaciones'])
     pdf.ln(10)
@@ -377,98 +450,6 @@ def crear_recibo_pago(datos_recibo):
     pdf.ln(10); pdf.set_y(-30); pdf.set_font('Arial', 'I', 7); pdf.multi_cell(0, 4, "Este documento es un comprobante interno. Si requiere factura fiscal (CFDI), favor de solicitarla dentro del mes en curso.", 0, 'C')
     val = pdf.output(dest='S'); return val.encode('latin-1', 'replace') if isinstance(val, str) else bytes(val)
 
-def crear_pdf_consentimiento(paciente_full, nombre_doctor, cedula_doctor, tipo_doc, tratamientos_str, riesgos_str, firma_pac, firma_doc, testigos_data, nivel_riesgo, edad_paciente, tutor_info):
-    pdf = PDFGenerator(); pdf.add_page()
-    fecha_hoy = get_fecha_mx()
-    paciente_full = formato_nombre_legal(paciente_full)
-    nombre_doctor = formato_nombre_legal(nombre_doctor)
-    
-    if "Aviso" in tipo_doc:
-        pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, "AVISO DE PRIVACIDAD INTEGRAL PARA PACIENTES", 0, 1, 'C'); pdf.ln(5)
-        texto = f"""En cumplimiento estricto con lo dispuesto por la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (la "Ley"), su Reglamento y los Lineamientos del Aviso de Privacidad, se emite el presente documento:
-
-IDENTIDAD Y DOMICILIO DEL RESPONSABLE
-La clínica dental denominada comercialmente ROYAL DENTAL (en adelante "El Responsable"), con domicilio en {DIRECCION_CONSULTORIO}, es la entidad responsable del uso, manejo, almacenamiento y confidencialidad de sus datos personales.
-
-{TXT_DATOS_SENSIBLES}
-
-FINALIDADES DEL TRATAMIENTO
-A) Prestación de servicios odontológicos. B) Creación y conservación del expediente clínico. C) Facturación y cobranza. D) Contacto para seguimiento.
-Finalidades Secundarias: Envío de promociones y encuestas de calidad.
-
-TRANSFERENCIA DE DATOS
-Sus datos pueden ser compartidos con: Laboratorios dentales y gabinetes radiológicos (para prótesis/estudios), Especialistas interconsultantes, Compañías Aseguradoras y Autoridades sanitarias.
-
-DERECHOS ARCO
-Usted tiene derecho a Acceder, Rectificar, Cancelar u Oponerse al tratamiento de sus datos presentando solicitud en recepción.
-
-{TXT_CONSENTIMIENTO_EXPRESO}"""
-        try: pdf.chapter_body(texto.encode('latin-1', 'replace').decode('latin-1'))
-        except: pdf.chapter_body(texto)
-
-    else:
-        pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, "CARTA DE CONSENTIMIENTO INFORMADO", 0, 1, 'C'); pdf.ln(5)
-        cuerpo = f"""LUGAR Y FECHA: Ciudad de México, a {fecha_hoy}
-NOMBRE DEL PACIENTE: {paciente_full}
-ODONTÓLOGO TRATANTE: {nombre_doctor} (Céd. Prof. {cedula_doctor})
-
-DECLARACIÓN DEL PACIENTE:
-Yo, el paciente arriba mencionado, declaro en pleno uso de mis facultades que he recibido una explicación clara sobre mi diagnóstico y el plan de tratamiento.
-
-PROCEDIMIENTO(S) A REALIZAR: {tratamientos_str}
-
-RIESGOS Y COMPLICACIONES ADVERTIDOS:
-{riesgos_str}
-
-{CLAUSULA_CIERRE}
-
-OBLIGACIÓN DE MEDIOS Y NO DE RESULTADOS: Entiendo que la Odontología no es una ciencia exacta y el profesional se compromete a usar todos los medios técnicos, pero no puede garantizar resultados biológicos al 100%.
-
-AUTORIZACIÓN: Autorizo la anestesia local y procedimientos necesarios, asumiendo los riesgos inherentes."""
-        try: pdf.chapter_body(cuerpo.encode('latin-1', 'replace').decode('latin-1'))
-        except: pdf.chapter_body(cuerpo)
-
-    pdf.ln(10)
-    y_firmas = pdf.get_y()
-    
-    pdf.set_font('Arial', 'B', 8)
-    
-    if edad_paciente < 18:
-        pdf.text(20, y_firmas + 40, f"FIRMA DEL TUTOR: {tutor_info.get('nombre', '')} ({tutor_info.get('relacion', '')})")
-        pdf.text(20, y_firmas + 45, f"En representación de: {paciente_full}")
-    else:
-        pdf.text(20, y_firmas + 40, "FIRMA DEL PACIENTE")
-        pdf.text(20, y_firmas + 45, paciente_full) 
-    
-    if firma_pac:
-        f_path = procesar_firma_digital(firma_pac)
-        if f_path: pdf.image(f_path, x=20, y=y_firmas, w=45, h=30); os.remove(f_path)
-    else: pdf.line(20, y_firmas + 35, 70, y_firmas + 35)
-
-    if "Aviso" not in tipo_doc:
-        pdf.text(110, y_firmas + 40, f"FIRMA ODONTOLOGO TRATANTE")
-        if firma_doc:
-            f_path_d = procesar_firma_digital(firma_doc)
-            if f_path_d: pdf.image(f_path_d, x=110, y=y_firmas, w=45, h=30); os.remove(f_path_d)
-        else: pdf.line(110, y_firmas + 35, 160, y_firmas + 35)
-
-        if nivel_riesgo == "HIGH_RISK":
-            pdf.ln(50)
-            y_testigos = pdf.get_y()
-            pdf.text(20, y_testigos + 40, f"TESTIGO 1: {formato_nombre_legal(testigos_data.get('n1',''))}")
-            if testigos_data.get('img_t1'):
-                 f_path_t1 = procesar_firma_digital(testigos_data['img_t1'])
-                 if f_path_t1: pdf.image(f_path_t1, x=20, y=y_testigos, w=45, h=30); os.remove(f_path_t1)
-            else: pdf.line(20, y_testigos + 35, 70, y_testigos + 35)
-
-            pdf.text(110, y_testigos + 40, f"TESTIGO 2: {formato_nombre_legal(testigos_data.get('n2',''))}")
-            if testigos_data.get('img_t2'):
-                 f_path_t2 = procesar_firma_digital(testigos_data['img_t2'])
-                 if f_path_t2: pdf.image(f_path_t2, x=110, y=y_testigos, w=45, h=30); os.remove(f_path_t2)
-            else: pdf.line(110, y_testigos + 35, 160, y_testigos + 35)
-        
-    val = pdf.output(dest='S'); return val.encode('latin-1') if isinstance(val, str) else bytes(val)
-
 # ==========================================
 # 6. APP PRINCIPAL
 # ==========================================
@@ -508,6 +489,15 @@ def vista_consultorio():
     
     menu = st.sidebar.radio("Menú", ["1. Agenda & Citas", "2. Gestión Pacientes", "3. Planes de Tratamiento", "4. Farmacia & Recetas", "5. Documentos & Firmas", "6. Control Asistencia"])
     
+    with st.sidebar.expander("🛠️ Mantenimiento"):
+        if st.button("🗑️ RESETEAR BASE DE DATOS (CUIDADO)", type="primary"):
+            try:
+                conn_temp = get_db_connection(); c_temp = conn_temp.cursor()
+                c_temp.execute("DELETE FROM pacientes"); c_temp.execute("DELETE FROM citas"); c_temp.execute("DELETE FROM asistencia"); c_temp.execute("DELETE FROM odontograma")
+                conn_temp.commit(); conn_temp.close(); st.cache_data.clear()
+                if 'perfil' in st.session_state: del st.session_state['perfil']
+                st.success("✅ Sistema y memoria limpiados."); time.sleep(1); st.rerun()
+            except Exception as e: st.error(f"Error crítico: {e}")
     if st.sidebar.button("Cerrar Sesión"): st.session_state.perfil = None; st.rerun()
 
     # --- 1. AGENDA ---
@@ -642,11 +632,11 @@ def vista_consultorio():
                 
                 # [V42.0] FIX ODONTOGRAMA TEXT
                 if edad < 12:
-                    st.info("Dentición Infantil / Mixta") # SIN EMOJI
+                    st.info("Dentición Infantil / Mixta") 
                     dientes_sup = [55,54,53,52,51,61,62,63,64,65]
                     dientes_inf = [85,84,83,82,81,71,72,73,74,75]
                 else:
-                    st.info("Dentición Permanente") # SIN EMOJI
+                    st.info("Dentición Permanente")
                     dientes_sup = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28]
                     dientes_inf = [48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38]
 
@@ -666,9 +656,9 @@ def vista_consultorio():
                         actualizar_diente(st.session_state.id_paciente_activo, str(d)); st.rerun()
 
                 st.caption("Clic para cambiar estado: Sano -> Caries -> Resina -> Ausente -> Corona")
+            else: st.warning("Seleccione paciente en 'BUSCAR'.")
 
         with tab_img:
-            # [V42.0] FIX TYPE ERROR
             if 'id_paciente_activo' in st.session_state and st.session_state.id_paciente_activo:
                 id_p = str(st.session_state.id_paciente_activo) # FORCE STRING
                 uploaded = st.file_uploader("Subir Archivo", type=['png','jpg','jpeg','pdf'])
@@ -785,7 +775,6 @@ def vista_consultorio():
             st.warning("No hay pacientes registrados.")
 
     elif menu == "3. Planes de Tratamiento":
-        # ... (Código Financiero V40.1) ...
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         if not pacientes.empty:
