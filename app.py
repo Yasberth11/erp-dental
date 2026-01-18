@@ -14,7 +14,6 @@ from fpdf import FPDF
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 import os
-import shutil
 
 # ==========================================
 # 1. CONFIGURACIÓN Y SISTEMA DE ARCHIVOS
@@ -22,27 +21,68 @@ import shutil
 st.set_page_config(page_title="Royal Dental Manager", page_icon="🦷", layout="wide", initial_sidebar_state="expanded")
 TZ_MX = pytz.timezone('America/Mexico_City')
 LOGO_FILE = "logo.png"
+LOGO_UNAM = "logo_unam.png" 
 DIRECCION_CONSULTORIO = "CALLE EL CHILAR S/N, SAN MATEO XOLOC, TEPOTZOTLÁN, ESTADO DE MÉXICO"
-CARPETA_PACIENTES = "pacientes_files" # [V41.0] Carpeta Raíz para archivos
+CARPETA_PACIENTES = "pacientes_files"
 
-# Asegurar que existe el directorio de archivos
+# Asegurar directorio de archivos
 if not os.path.exists(CARPETA_PACIENTES):
     os.makedirs(CARPETA_PACIENTES)
 
 # CONSTANTES DOCTORES
 DOCS_INFO = {
-    "Dr. Emmanuel": {"nombre": "Dr. Emmanuel Tlacaelel Lopez Bermejo", "cedula": "12345678"},
-    "Dra. Mónica": {"nombre": "Dra. Monica Montserrat Rodriguez Alvarez", "cedula": "87654321"}
+    "Dr. Emmanuel": {
+        "nombre": "Dr. Emmanuel Tlacaelel Lopez Bermejo", 
+        "cedula": "12345678", 
+        "universidad": "UNAM - FES Iztacala",
+        "especialidad": "Cirujano Dentista"
+    },
+    "Dra. Mónica": {
+        "nombre": "Dra. Monica Montserrat Rodriguez Alvarez", 
+        "cedula": "87654321",
+        "universidad": "UNAM - FES Iztacala",
+        "especialidad": "Cirujano Dentista"
+    }
 }
 
 # LISTAS MAESTRAS
 LISTA_OCUPACIONES = ["Estudiante", "Empleado/a", "Empresario/a", "Hogar", "Comerciante", "Docente", "Sector Salud", "Jubilado/a", "Desempleado/a", "Otro"]
 LISTA_PARENTESCOS = ["Madre", "Padre", "Abuelo(a)", "Tío(a)", "Hermano(a) Mayor", "Tutor Legal Designado", "Otro"]
 
-# TEXTOS JURÍDICOS
+# BASES DE DATOS DE TEXTOS (LEGAL & MÉDICO)
 CLAUSULA_CIERRE = "Adicionalmente, entiendo que pueden presentarse eventos imprevisibles en cualquier acto médico, tales como: reacciones alérgicas a los anestésicos o materiales (incluso si no tengo antecedentes conocidos), síncope (desmayo), trismus (dificultad para abrir la boca), hematomas, o infecciones secundarias. Acepto que el éxito del tratamiento depende también de mi biología y de seguir estrictamente las indicaciones post-operatorias."
 TXT_DATOS_SENSIBLES = "DATOS PERSONALES SENSIBLES: Además de los datos de identificación, y para cumplir con la Normatividad Sanitaria (NOM-004-SSA3-2012 y NOM-013-SSA2-2015), recabamos: Estado de salud presente, pasado y futuro; Antecedentes Heredo-Familiares y Patológicos; Historial Farmacológico y Alergias; Hábitos de vida (tabaquismo/alcoholismo); e Imágenes diagnósticas/Biometría."
 TXT_CONSENTIMIENTO_EXPRESO = "CONSENTIMIENTO EXPRESO: De conformidad con el artículo 9 de la LFPDPPP, otorgo mi consentimiento expreso para el tratamiento de mis datos sensibles. Reconozco que la firma digital en este documento tiene plena validez legal, equiparándose a mi firma autógrafa."
+
+MEDICAMENTOS_DB = {
+    "Dolor Leve": "Ketorolaco 10mg.\nTomar 1 tableta cada 8 horas por 3 días en caso de dolor.",
+    "Dolor Fuerte": "1. Ketorolaco/Tramadol 10mg/25mg. Tomar 1 tableta cada 8 horas por 3 días.\n2. Ibuprofeno 600mg. Tomar 1 tableta cada 8 horas por 3 días (intercalar con el anterior).",
+    "Infección": "1. Amoxicilina/Ac. Clavulánico 875mg/125mg. Tomar 1 tableta cada 12 horas por 7 días.\n2. Ibuprofeno 400mg. Tomar 1 tableta cada 8 horas por 3 días para inflamación.",
+    "Alergia Penicilina": "Clindamicina 300mg.\nTomar 1 cápsula cada 6 horas por 7 días.",
+    "Profilaxis Antibiótica": "Amoxicilina 2g (4 tabletas de 500mg).\nTomar las 4 tabletas juntas en una sola toma, 1 hora antes del procedimiento.",
+    "Pediátrico (General)": "Paracetamol Suspensión.\nAdministrar dosis según peso del paciente cada 6-8 horas en caso de fiebre o dolor."
+}
+
+INDICACIONES_DB = {
+    "Extracción / Cirugía": """1. CONTROL DE SANGRADO: Muerda la gasa firmemente por 30-40 minutos. Si persiste sangrado activo, coloque una nueva.
+2. PROHIBICIONES (24h): NO escupir, NO usar popotes (succión), NO enjuagarse, NO fumar ni beber alcohol (Riesgo grave de infección).
+3. ALIMENTACIÓN: Dieta blanda y fría por 48 horas (Nieves sin semillas, gelatinas). Cero grasas, irritantes o semillas pequeñas.
+4. HIGIENE: No cepillar la zona hoy. Mañana inicie higiene suave. Enjuagues pasivos con agua y sal.
+5. TERAPIA TÉRMICA: Compresas frías hoy (15min puesto/15min descanso). Calor húmedo después de 48 horas.""",
+
+    "Blanqueamiento": """1. DIETA BLANCA (48h): Evite alimentos con colorantes (Café, vino, refresco de cola, salsas oscuras, frutos rojos).
+2. SENSIBILIDAD: Evite bebidas muy frías/calientes y cítricos por 3 días. Use analgésico si hay molestia.
+3. HÁBITOS: No fumar (pigmentación inmediata).
+4. MANTENIMIENTO: El resultado no es permanente, depende de sus hábitos.""",
+
+    "Endodoncia": """1. CUIDADO INMEDIATO: No comer hasta pasar la anestesia.
+2. RIESGO DE FRACTURA: Su diente está debilitado. NO mastique cosas duras con ese lado hasta tener la restauración final (corona). Si el diente se fractura, podría requerir extracción.
+3. SEGUIMIENTO: Es OBLIGATORIO acudir a la cita de rehabilitación definitiva.""",
+
+    "General / Limpieza": """1. Siga su técnica de cepillado habitual.
+2. Utilice hilo dental diariamente.
+3. Acuda a sus revisiones semestrales."""
+}
 
 RIESGOS_DB = {
     "Profilaxis (Limpieza Ultrasónica)": "Sensibilidad dental transitoria (frio/calor); sangrado leve de encías debido a la inflamación previa; desalojo de restauraciones antiguas que estuvieran desajustadas; molestia en cuellos dentales expuestos.",
@@ -107,21 +147,18 @@ def get_db_connection():
 def migrar_tablas():
     conn = get_db_connection()
     c = conn.cursor()
-    # [V41.0] Tabla Odontograma
+    # [V41.0] MIGRACION NUEVA TABLA ODONTOGRAMA Y COLUMNA ASISTENCIA
     c.execute('''CREATE TABLE IF NOT EXISTS odontograma (
-        id_paciente TEXT,
-        diente TEXT,
-        estado TEXT,
-        fecha_actualizacion TEXT,
-        PRIMARY KEY (id_paciente, diente)
-    )''')
-    
+        id_paciente TEXT, diente TEXT, estado TEXT, fecha_actualizacion TEXT,
+        PRIMARY KEY (id_paciente, diente))''')
+    try: c.execute(f"ALTER TABLE citas ADD COLUMN estatus_asistencia TEXT")
+    except: pass
+
+    # MIGRACIONES PREVIAS (V32-V39)
     try: c.execute(f"ALTER TABLE servicios ADD COLUMN duracion INTEGER")
     except: pass
     try: c.execute(f"ALTER TABLE citas ADD COLUMN duracion INTEGER")
     except: pass
-    
-    # Migraciones anteriores
     for col in ['parentesco_tutor', 'telefono_emergencia', 'antecedentes_medicos', 'ahf', 'app', 'apnp', 'sexo', 'domicilio', 'tutor', 'contacto_emergencia', 'ocupacion', 'estado_civil', 'motivo_consulta', 'exploracion_fisica', 'diagnostico']:
         try: c.execute(f"ALTER TABLE pacientes ADD COLUMN {col} TEXT")
         except: pass
@@ -134,14 +171,45 @@ def migrar_tablas():
     conn.close()
 
 def actualizar_duraciones():
-    # ... (Sin cambios en esta función)
+    # ... (Se mantiene la carga de duraciones)
+    tiempos = {
+        "Profilaxis (Limpieza Ultrasónica)": 30, "Aplicación de Flúor (Niños)": 30, "Sellador de Fosetas y Fisuras": 30,
+        "Resina Simple (1 cara)": 45, "Resina Compuesta (2 o más caras)": 60, "Reconstrucción de Muñón": 60, "Curación Temporal (Cavit)": 30,
+        "Extracción Simple": 60, "Cirugía de Tercer Molar (Muela del Juicio)": 90, "Drenaje de Absceso": 45,
+        "Endodoncia Anterior (1 conducto)": 90, "Endodoncia Premolar (2 conductos)": 90, "Endodoncia Molar (3+ conductos)": 120,
+        "Corona Zirconia": 90, "Corona Metal-Porcelana": 90, "Incrustación Estética": 90, "Carilla de Porcelana": 90, "Poste de Fibra de Vidrio": 60,
+        "Placa Total (Acrílico) - Una arcada": 30, "Prótesis Flexible (Valplast) - Unilateral": 30,
+        "Blanqueamiento (Consultorio 2 sesiones)": 90, "Blanqueamiento (Guardas en casa)": 30,
+        "Pago Inicial (Brackets Metálicos)": 60, "Mensualidad Ortodoncia": 30, "Recolocación de Bracket (Reposición)": 30,
+        "Pulpotomía": 60, "Corona Acero-Cromo": 60, "Garantía (Retoque/Reparación)": 30
+    }
     conn = get_db_connection(); c = conn.cursor()
     c.execute("UPDATE servicios SET duracion = 30 WHERE duracion IS NULL")
+    for nombre, mins in tiempos.items():
+        c.execute("UPDATE servicios SET duracion = ? WHERE nombre_tratamiento = ?", (mins, nombre))
     conn.commit(); conn.close()
 
 def actualizar_niveles_riesgo():
-    # ... (Sin cambios en esta función)
-    conn = get_db_connection(); c = conn.cursor(); c.execute("UPDATE servicios SET consent_level = 'LOW_RISK'"); conn.commit(); conn.close()
+    mapping = {
+        'HIGH_RISK': [
+            "Extracción Simple", "Cirugía de Tercer Molar (Muela del Juicio)", "Drenaje de Absceso", 
+            "Endodoncia Anterior (1 conducto)", "Endodoncia Premolar (2 conductos)", "Endodoncia Molar (3+ conductos)",
+            "Corona Zirconia", "Corona Metal-Porcelana", "Incrustación Estética", "Carilla de Porcelana", "Poste de Fibra de Vidrio",
+            "Pulpotomía", "Corona Acero-Cromo", "Pago Inicial (Brackets Metálicos)"
+        ],
+        'NO_CONSENT': [
+            "Mensualidad Ortodoncia", "Recolocación de Bracket (Reposición)", "Garantía (Retoque/Reparación)"
+        ]
+    }
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("UPDATE servicios SET consent_level = 'LOW_RISK'")
+    for t in mapping['HIGH_RISK']:
+        c.execute("UPDATE servicios SET consent_level = 'HIGH_RISK' WHERE nombre_tratamiento = ?", (t,))
+    for t in mapping['NO_CONSENT']:
+        c.execute("UPDATE servicios SET consent_level = 'NO_CONSENT' WHERE nombre_tratamiento = ?", (t,))
+    conn.commit()
+    conn.close()
 
 def init_db():
     conn = get_db_connection()
@@ -160,7 +228,7 @@ def init_db():
         precio_final REAL, porcentaje REAL, tiene_factura TEXT, iva REAL, subtotal REAL, 
         metodo_pago TEXT, estado_pago TEXT, requiere_factura TEXT, notas TEXT, 
         monto_pagado REAL, saldo_pendiente REAL, fecha_pago TEXT, costo_laboratorio REAL, categoria TEXT,
-        duracion INTEGER
+        duracion INTEGER, estatus_asistencia TEXT
     )''')
     c.execute('''CREATE TABLE IF NOT EXISTS auditoria (id_evento INTEGER PRIMARY KEY AUTOINCREMENT, fecha_evento TEXT, usuario TEXT, accion TEXT, detalle TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS asistencia (id_registro INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, doctor TEXT, hora_entrada TEXT, hora_salida TEXT, horas_totales REAL, estado TEXT)''')
@@ -168,12 +236,8 @@ def init_db():
     
     # [V41.0] TABLA ODONTOGRAMA
     c.execute('''CREATE TABLE IF NOT EXISTS odontograma (
-        id_paciente TEXT,
-        diente TEXT,
-        estado TEXT,
-        fecha_actualizacion TEXT,
-        PRIMARY KEY (id_paciente, diente)
-    )''')
+        id_paciente TEXT, diente TEXT, estado TEXT, fecha_actualizacion TEXT,
+        PRIMARY KEY (id_paciente, diente))''')
     
     conn.commit()
     conn.close()
@@ -252,7 +316,7 @@ def calcular_edad_completa(nacimiento_input):
         else: nacimiento = nacimiento_input
         edad = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
         return edad, "MENOR" if edad < 18 else "ADULTO"
-    except: return "N/A", ""
+    except: return 0, "N/A"
 
 def generar_id_unico(nombre, paterno, nacimiento):
     try:
@@ -278,14 +342,16 @@ def get_usos_cfdi(): return ["D01 - Honorarios médicos, dentales", "S01 - Sin e
 
 def verificar_disponibilidad(fecha_str, hora_str, duracion_minutos=30):
     conn = get_db_connection(); c = conn.cursor()
-    c.execute("SELECT hora, duracion FROM citas WHERE fecha=? AND estado_pago != 'CANCELADO' AND (precio_final IS NULL OR precio_final = 0)", (fecha_str,))
+    c.execute("SELECT hora, duracion FROM citas WHERE fecha=? AND estado_pago != 'CANCELADO' AND (estatus_asistencia IS NULL OR estatus_asistencia != 'Canceló') AND (precio_final IS NULL OR precio_final = 0)", (fecha_str,))
     citas_dia = c.fetchall()
     conn.close()
+    
     try:
         req_start = datetime.strptime(hora_str, "%H:%M")
         req_end = req_start + timedelta(minutes=duracion_minutos)
         req_start_min = req_start.hour * 60 + req_start.minute
         req_end_min = req_end.hour * 60 + req_end.minute
+        
         for cit in citas_dia:
             h_inicio = cit['hora']
             d_duracion = cit['duracion'] if cit['duracion'] else 30 
@@ -293,7 +359,9 @@ def verificar_disponibilidad(fecha_str, hora_str, duracion_minutos=30):
             c_end = c_start + timedelta(minutes=d_duracion)
             c_start_min = c_start.hour * 60 + c_start.minute
             c_end_min = c_end.hour * 60 + c_end.minute
-            if (req_start_min < c_end_min) and (req_end_min > c_start_min): return True 
+            
+            if (req_start_min < c_end_min) and (req_end_min > c_start_min):
+                return True 
         return False 
     except: return True 
 
@@ -315,18 +383,14 @@ def actualizar_diente(id_paciente, diente):
     c = conn.cursor()
     # Ciclo de estados: Sano -> Caries -> Resina -> Ausente -> Corona -> Sano
     estados = ["Sano", "Caries", "Resina", "Ausente", "Corona"]
-    colores = {"Sano": "white", "Caries": "#D32F2F", "Resina": "#1976D2", "Ausente": "black", "Corona": "#FFD700"}
-    
     # Obtener estado actual
     c.execute("SELECT estado FROM odontograma WHERE id_paciente=? AND diente=?", (id_paciente, diente))
     row = c.fetchone()
     estado_actual = row[0] if row else "Sano"
     
-    # Calcular nuevo estado
     idx = estados.index(estado_actual)
     nuevo_estado = estados[(idx + 1) % len(estados)]
     
-    # Guardar
     c.execute("INSERT OR REPLACE INTO odontograma (id_paciente, diente, estado, fecha_actualizacion) VALUES (?,?,?,?)", (id_paciente, diente, nuevo_estado, get_fecha_mx()))
     conn.commit()
     conn.close()
@@ -346,15 +410,21 @@ class PDFGenerator(FPDF):
     def __init__(self): super().__init__()
     def header(self):
         if os.path.exists(LOGO_FILE):
-            try: self.image(LOGO_FILE, 10, 8, 50)
+            try: self.image(LOGO_FILE, 10, 8, 40) # Logo Clínica
             except: pass
+        
+        # [V41.0] LOGO UNAM
+        if os.path.exists(LOGO_UNAM):
+            try: self.image(LOGO_UNAM, 170, 8, 25) # Logo UNAM
+            except: pass
+
         self.set_font('Arial', 'B', 14); self.set_text_color(0, 43, 91)
-        self.cell(0, 10, 'ROYAL DENTAL', 0, 1, 'R'); self.ln(1)
+        self.cell(0, 10, 'ROYAL DENTAL', 0, 1, 'C'); self.ln(1)
         self.set_font('Arial', 'I', 9); self.set_text_color(100, 100, 100)
-        self.cell(0, 5, DIRECCION_CONSULTORIO, 0, 1, 'R'); self.ln(10)
+        self.cell(0, 5, DIRECCION_CONSULTORIO, 0, 1, 'C'); self.ln(10)
     def footer(self):
         self.set_y(-15); self.set_font('Arial', 'I', 8); self.set_text_color(128, 128, 128)
-        self.cell(0, 10, f'Página {self.page_no()} - Documento Confidencial', 0, 0, 'C')
+        self.cell(0, 10, f'Página {self.page_no()} - Documento Oficial Royal Dental', 0, 0, 'C')
     def chapter_body(self, body, style=''):
         self.set_font('Arial', style, 10); self.set_text_color(0, 0, 0); self.multi_cell(0, 5, body); self.ln(2)
 
@@ -366,6 +436,74 @@ def procesar_firma_digital(firma_img_data):
         img.save(temp_filename)
         return temp_filename
     except: return None
+
+# [NUEVO V41.0] GENERADOR DE RECETA + INDICACIONES
+def crear_pdf_receta(datos):
+    pdf = PDFGenerator()
+    
+    # --- PÁGINA 1: RECETA MÉDICA ---
+    pdf.add_page()
+    pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, "RECETA MÉDICA", 0, 1, 'R')
+    pdf.ln(5)
+    
+    # Datos Doctor
+    pdf.set_font('Arial', 'B', 10); pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 5, datos['doctor_nombre'], 0, 1)
+    pdf.set_font('Arial', '', 9)
+    pdf.cell(0, 5, f"{datos['doctor_uni']} - Céd. Prof: {datos['doctor_cedula']}", 0, 1)
+    pdf.cell(0, 5, f"Especialidad: {datos['doctor_esp']}", 0, 1)
+    
+    pdf.line(10, pdf.get_y()+2, 200, pdf.get_y()+2); pdf.ln(10)
+    
+    # Datos Paciente
+    pdf.set_font('Arial', 'B', 10)
+    pdf.cell(20, 6, "Paciente:", 0, 0); pdf.set_font('Arial', '', 10)
+    pdf.cell(100, 6, datos['paciente_nombre'], 0, 0)
+    pdf.set_font('Arial', 'B', 10)
+    pdf.cell(15, 6, "Fecha:", 0, 0); pdf.set_font('Arial', '', 10)
+    pdf.cell(30, 6, datos['fecha'], 0, 1)
+    
+    pdf.set_font('Arial', 'B', 10); pdf.cell(15, 6, "Edad:", 0, 0)
+    pdf.set_font('Arial', '', 10); pdf.cell(30, 6, f"{datos['edad']} años", 0, 1)
+    pdf.ln(10)
+    
+    # Cuerpo Receta
+    pdf.set_fill_color(240, 240, 240); pdf.set_font('Arial', 'B', 11)
+    pdf.cell(0, 10, "PRESCRIPCIÓN", 1, 1, 'L', 1)
+    pdf.set_font('Courier', '', 11); pdf.set_text_color(0, 0, 50)
+    pdf.multi_cell(0, 8, datos['medicamentos'])
+    
+    # Firma
+    pdf.ln(40)
+    pdf.set_draw_color(0, 0, 0); pdf.line(70, pdf.get_y(), 140, pdf.get_y())
+    pdf.set_font('Arial', 'B', 9); pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 5, "FIRMA DEL MÉDICO", 0, 1, 'C')
+
+    # --- PÁGINA 2: INDICACIONES Y LEGAL ---
+    pdf.add_page()
+    pdf.set_font('Arial', 'B', 14); pdf.set_text_color(200, 0, 0)
+    pdf.cell(0, 10, "INDICACIONES Y CUIDADOS POST-TRATAMIENTO", 0, 1, 'C')
+    pdf.ln(5)
+    
+    # Texto Indicaciones
+    pdf.set_font('Arial', '', 10); pdf.set_text_color(0, 0, 0)
+    pdf.multi_cell(0, 6, datos['indicaciones'])
+    pdf.ln(10)
+    
+    # SEÑALES DE ALERTA
+    pdf.set_fill_color(255, 235, 238); pdf.set_text_color(200, 0, 0); pdf.set_font('Arial', 'B', 11)
+    pdf.cell(0, 8, "⚠️ SEÑALES DE ALERTA", 1, 1, 'L', 1)
+    pdf.set_font('Arial', '', 10); pdf.set_text_color(0, 0, 0)
+    pdf.multi_cell(0, 6, "Contacte al consultorio si presenta: Sangrado que no cede tras 40 min de presión, Fiebre >38°C, Dificultad para respirar/tragar, o Reacción alérgica (ronchas/hinchazón).")
+    pdf.ln(5)
+    
+    # DESLINDE LEGAL (BLINDAJE)
+    pdf.set_fill_color(240, 240, 240); pdf.set_text_color(0, 0, 0); pdf.set_font('Arial', 'B', 9)
+    pdf.cell(0, 8, "DESLINDE DE RESPONSABILIDAD Y SEGUIMIENTO", 1, 1, 'L', 1)
+    pdf.set_font('Arial', 'I', 8)
+    pdf.multi_cell(0, 5, "El éxito del tratamiento depende del seguimiento profesional. El consultorio NO se hace responsable por complicaciones, infecciones o fracasos derivados de negligencia en estos cuidados, automedicación o la INASISTENCIA a las citas de control programadas. La falta de seguimiento exime al clínico de garantías.")
+
+    val = pdf.output(dest='S'); return val.encode('latin-1') if isinstance(val, str) else bytes(val)
 
 def crear_pdf_consentimiento(paciente_full, nombre_doctor, cedula_doctor, tipo_doc, tratamientos_str, riesgos_str, firma_pac, firma_doc, testigos_data, nivel_riesgo, edad_paciente, tutor_info):
     pdf = PDFGenerator(); pdf.add_page()
@@ -536,6 +674,7 @@ def crear_pdf_historia(p, historial):
             
     val = pdf.output(dest='S'); return val.encode('latin-1') if isinstance(val, str) else bytes(val)
 
+# GENERADOR DE RECIBO DE PAGO INTELIGENTE
 def crear_recibo_pago(datos_recibo):
     pdf = PDFGenerator(); pdf.add_page()
     pdf.set_font('Arial', 'B', 16); pdf.cell(0, 10, 'RECIBO DE PAGO', 0, 1, 'C'); pdf.ln(5)
@@ -644,7 +783,10 @@ def vista_consultorio():
     conn = get_db_connection(); render_header(conn)
     if os.path.exists(LOGO_FILE): st.sidebar.image(LOGO_FILE, use_column_width=True)
     st.sidebar.markdown("### 🏥 Royal Dental"); st.sidebar.caption(f"Fecha: {get_fecha_mx()}")
-    menu = st.sidebar.radio("Menú", ["1. Agenda & Citas", "2. Gestión Pacientes", "3. Planes de Tratamiento", "4. Documentos & Firmas", "5. Control Asistencia"])
+    
+    # [MODIFICADO V41.0] MENU CON NUEVA OPCION FARMACIA
+    menu = st.sidebar.radio("Menú", ["1. Agenda & Citas", "2. Gestión Pacientes", "3. Planes de Tratamiento", "4. Farmacia & Recetas", "5. Documentos & Firmas", "6. Control Asistencia"])
+    
     with st.sidebar.expander("🛠️ Mantenimiento"):
         if st.button("🗑️ RESETEAR BASE DE DATOS (CUIDADO)", type="primary"):
             try:
@@ -658,15 +800,32 @@ def vista_consultorio():
 
     if menu == "1. Agenda & Citas":
         st.title("📅 Agenda")
-        # [V41.0] SISTEMA DE RECALL
-        with st.expander("🔔 Pacientes para Recall (> 6 Meses)", expanded=False):
-            try:
-                # Lógica simplificada: Traer última cita de todos, filtrar por fecha
-                df_recall = pd.read_sql("SELECT nombre_paciente, MAX(fecha) as ultima_cita FROM citas GROUP BY id_paciente", conn)
-                # Convertir a fecha y filtrar (demo)
-                st.dataframe(df_recall, use_container_width=True)
-            except: st.info("No hay datos suficientes para recall.")
-
+        
+        # [V41.0] GESTOR DE ASISTENCIA (NUEVO MODULO)
+        with st.expander("✅ Gestión de Asistencia (Hoy)", expanded=True):
+            hoy = get_fecha_mx()
+            citas_hoy = pd.read_sql(f"SELECT rowid, hora, nombre_paciente, tratamiento, estatus_asistencia FROM citas WHERE fecha='{hoy}' AND estado_pago != 'CANCELADO'", conn)
+            
+            if not citas_hoy.empty:
+                for _, r in citas_hoy.iterrows():
+                    col_a1, col_a2, col_a3, col_a4 = st.columns([2, 1, 1, 1])
+                    estatus_actual = r['estatus_asistencia'] if r['estatus_asistencia'] else "Programada"
+                    col_a1.markdown(f"**{r['hora']} - {r['nombre_paciente']}**<br><span style='color:gray'>{r['tratamiento']}</span>", unsafe_allow_html=True)
+                    
+                    if col_a2.button("🟢 Asistió", key=f"asi_{r['rowid']}"):
+                        c = conn.cursor(); c.execute("UPDATE citas SET estatus_asistencia='Asistió' WHERE rowid=?", (r['rowid'],)); conn.commit(); st.rerun()
+                    
+                    if col_a3.button("🔴 No Asistió", key=f"no_{r['rowid']}"):
+                        # LOGICA DE BLINDAJE: Marcar falta y agregar nota automatica
+                        c = conn.cursor()
+                        nota_auto = f"SISTEMA: Paciente no acudió a cita programada el {hoy}. Riesgo de abandono."
+                        c.execute("UPDATE citas SET estatus_asistencia='No Asistió', notas = notas || ? WHERE rowid=?", ("\n" + nota_auto, r['rowid']))
+                        conn.commit(); st.warning("Falta registrada y nota legal agregada."); time.sleep(1.5); st.rerun()
+                    
+                    col_a4.caption(f"Estatus: {estatus_actual}")
+                    st.divider()
+            else: st.info("No hay citas activas para hoy.")
+            
         with st.expander("🔍 BUSCAR CITAS", expanded=False):
             q_cita = st.text_input("Buscar cita por nombre:")
             if q_cita:
@@ -769,66 +928,7 @@ def vista_consultorio():
                     else: st.markdown(f"""<div style="padding:8px; border-bottom:1px solid #eee; display:flex; align-items:center;"><span style="font-weight:bold; color:#aaa; width:60px;">{slot}</span><span style="color:#ddd; font-size:0.9em;">Disponible</span></div>""", unsafe_allow_html=True)
 
     elif menu == "2. Gestión Pacientes":
-        st.title("📂 Expediente Clínico"); tab_b, tab_n, tab_e, tab_odo, tab_img = st.tabs(["🔍 BUSCAR", "➕ ALTA", "✏️ EDITAR", "🦷 ODONTOGRAMA", "📸 IMÁGENES"])
-        
-        # [V41.0] TAB ODONTOGRAMA
-        with tab_odo:
-            if 'id_paciente_activo' in st.session_state and st.session_state.id_paciente_activo:
-                st.subheader(f"Odontograma: {st.session_state.id_paciente_activo}")
-                col_d1, col_d2 = st.columns(2)
-                
-                # Función para renderizar un cuadrante
-                def render_quadrant(dientes, label):
-                    st.caption(label)
-                    cols = st.columns(len(dientes))
-                    estados_pac = obtener_estado_dientes(st.session_state.id_paciente_activo)
-                    colores = {"Sano": "⚪", "Caries": "🔴", "Resina": "🔵", "Ausente": "⚫", "Corona": "🟡"}
-                    
-                    for idx, diente in enumerate(dientes):
-                        estado = estados_pac.get(str(diente), "Sano")
-                        icono = colores.get(estado, "⚪")
-                        if cols[idx].button(f"{icono}\n{diente}", key=f"btn_{diente}"):
-                            actualizar_diente(st.session_state.id_paciente_activo, str(diente))
-                            st.rerun()
-
-                with col_d1:
-                    render_quadrant([18,17,16,15,14,13,12,11], "Superior Derecho")
-                    render_quadrant([48,47,46,45,44,43,42,41], "Inferior Derecho")
-                with col_d2:
-                    render_quadrant([21,22,23,24,25,26,27,28], "Superior Izquierdo")
-                    render_quadrant([31,32,33,34,35,36,37,38], "Inferior Izquierdo")
-                
-                st.info("Leyenda: ⚪Sano 🔴Caries 🔵Resina ⚫Ausente 🟡Corona (Clic para cambiar)")
-            else:
-                st.warning("Seleccione un paciente primero en la pestaña 'BUSCAR'.")
-
-        # [V41.0] TAB IMAGENES
-        with tab_img:
-            if 'id_paciente_activo' in st.session_state and st.session_state.id_paciente_activo:
-                id_p = st.session_state.id_paciente_activo
-                st.subheader(f"Galería de: {id_p}")
-                
-                uploaded_file = st.file_uploader("Subir Radiografía/Foto", type=['png', 'jpg', 'jpeg', 'pdf'])
-                if uploaded_file:
-                    path_dir = os.path.join(CARPETA_PACIENTES, id_p)
-                    if not os.path.exists(path_dir): os.makedirs(path_dir)
-                    
-                    with open(os.path.join(path_dir, uploaded_file.name), "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    st.success("Archivo subido")
-                
-                # Mostrar Galería
-                path_dir = os.path.join(CARPETA_PACIENTES, id_p)
-                if os.path.exists(path_dir):
-                    files = os.listdir(path_dir)
-                    if files:
-                        for f in files:
-                            st.image(os.path.join(path_dir, f), caption=f, width=300)
-                    else: st.info("Sin imágenes.")
-                else: st.info("Carpeta vacía.")
-            else:
-                st.warning("Seleccione un paciente primero.")
-
+        st.title("📂 Expediente Clínico"); tab_b, tab_n, tab_e, tab_odo, tab_img = st.tabs(["🔍 BUSCAR/IMPRIMIR", "➕ NUEVO (ALTA)", "✏️ EDITAR", "🦷 ODONTOGRAMA", "📸 IMÁGENES"])
         with tab_b:
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
@@ -883,6 +983,59 @@ def vista_consultorio():
                         if p['regimen'] in reg_list: idx_reg = reg_list.index(p['regimen'])
                         e_reg = ec8.selectbox("Régimen", reg_list, index=idx_reg)
                         if st.form_submit_button("💾 ACTUALIZAR TODO"): c = conn.cursor(); c.execute("UPDATE pacientes SET nombre=?, apellido_paterno=?, apellido_materno=?, telefono=?, email=?, app=?, ahf=?, apnp=?, rfc=?, cp=?, regimen=?, contacto_emergencia=?, telefono_emergencia=? WHERE id_paciente=?", (formato_nombre_legal(e_nom), formato_nombre_legal(e_pat), formato_nombre_legal(e_mat), formatear_telefono_db(e_tel), limpiar_email(e_email), formato_oracion(e_app), formato_oracion(e_ahf), formato_oracion(e_apnp), formato_nombre_legal(e_rfc), e_cp, e_reg, formato_nombre_legal(e_cont_nom), e_cont_tel, id_target)); conn.commit(); st.success("Datos actualizados."); time.sleep(1.5); st.rerun()
+        
+        # [V41.1] ODONTOGRAMA LOGIC
+        with tab_odo:
+            if 'id_paciente_activo' in st.session_state and st.session_state.id_paciente_activo:
+                p = pd.read_sql(f"SELECT * FROM pacientes WHERE id_paciente='{st.session_state.id_paciente_activo}'", conn).iloc[0]
+                edad, _ = calcular_edad_completa(p['fecha_nacimiento'])
+                st.subheader(f"Odontograma ({edad} años)")
+                
+                # LOGICA EDAD
+                if edad < 12:
+                    st.info("👶 Dentición Infantil/Mixta Detectada")
+                    dientes_sup = [55,54,53,52,51,61,62,63,64,65]
+                    dientes_inf = [85,84,83,82,81,71,72,73,74,75]
+                else:
+                    st.info("🧑 Dentición Adulta Detectada")
+                    dientes_sup = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28]
+                    dientes_inf = [48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38]
+
+                colores = {"Sano": "⚪", "Caries": "🔴", "Resina": "🔵", "Ausente": "⚫", "Corona": "🟡"}
+                estados_pac = obtener_estado_dientes(st.session_state.id_paciente_activo)
+                
+                # Renderizar Superior
+                cols_sup = st.columns(len(dientes_sup))
+                for idx, d in enumerate(dientes_sup):
+                    est = estados_pac.get(str(d), "Sano")
+                    if cols_sup[idx].button(f"{colores[est]}\n{d}", key=f"d_{d}"):
+                        actualizar_diente(st.session_state.id_paciente_activo, str(d)); st.rerun()
+                
+                st.divider()
+                
+                # Renderizar Inferior
+                cols_inf = st.columns(len(dientes_inf))
+                for idx, d in enumerate(dientes_inf):
+                    est = estados_pac.get(str(d), "Sano")
+                    if cols_inf[idx].button(f"{colores[est]}\n{d}", key=f"d_{d}"):
+                        actualizar_diente(st.session_state.id_paciente_activo, str(d)); st.rerun()
+
+                st.caption("Clic para cambiar estado: Sano -> Caries -> Resina -> Ausente -> Corona")
+            else: st.warning("Seleccione paciente en 'BUSCAR'.")
+
+        with tab_img:
+            if 'id_paciente_activo' in st.session_state:
+                id_p = st.session_state.id_paciente_activo
+                uploaded = st.file_uploader("Subir Archivo", type=['png','jpg','jpeg','pdf'])
+                if uploaded:
+                    path = os.path.join(CARPETA_PACIENTES, id_p)
+                    if not os.path.exists(path): os.makedirs(path)
+                    with open(os.path.join(path, uploaded.name), "wb") as f: f.write(uploaded.getbuffer())
+                    st.success("Guardado"); time.sleep(1); st.rerun()
+                
+                path = os.path.join(CARPETA_PACIENTES, id_p)
+                if os.path.exists(path):
+                    for f in os.listdir(path): st.image(os.path.join(path,f), caption=f, width=200)
 
     elif menu == "3. Planes de Tratamiento":
         st.title("💰 Finanzas")
@@ -900,12 +1053,10 @@ def vista_consultorio():
                         item = filt[filt['nombre_tratamiento'] == trat_sel].iloc[0]; precio_sug = float(item['precio_lista']); costo_lab = float(item['costo_laboratorio_base'])
                     else: cat_sel = "Manual"; trat_sel = col_up2.text_input("Tratamiento"); precio_sug = 0.0; costo_lab = 0.0
                     doc_name = col_up3.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
-                    
                     with st.form("cobro", clear_on_submit=True):
                         c1, c2, c3 = st.columns(3); precio = c1.number_input("Precio", value=precio_sug, step=50.0); abono = c2.number_input("Abono", step=50.0); saldo = precio - abono; c3.metric("Saldo", f"${saldo:,.2f}")
                         c4, c5, c6 = st.columns([1.5, 1, 1]); metodo = c4.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia", "Garantía", "Pendiente de Pago"]); num_sessions = c5.number_input("Sesiones", min_value=1, value=1); agendar = c6.checkbox("¿Agendar Cita?")
-                        if agendar: 
-                            c7, c8 = st.columns(2); f_cita = c7.date_input("Fecha Cita", datetime.now(TZ_MX)); h_cita = c8.selectbox("Hora Cita", generar_slots_tiempo())
+                        if agendar: c7, c8 = st.columns(2); f_cita = c7.date_input("Fecha Cita", datetime.now(TZ_MX)); h_cita = c8.selectbox("Hora Cita", generar_slots_tiempo())
                         else: f_cita = datetime.now(TZ_MX); h_cita = "00:00"
                         notas = st.text_area("Notas Evolución", height=70)
                         if st.form_submit_button("Registrar Cobro/Tratamiento"):
@@ -955,8 +1106,35 @@ def vista_consultorio():
                         datos_pdf = { "paciente": f"{p_info['nombre']} {p_info['apellido_paterno']} {p_info['apellido_materno']}", "rfc": p_info.get('rfc', 'XAXX010101000'), "folio": f"RD-{int(time.time())}-{row_sel['rowid']}", "fecha": fecha_corte, "items_hoy": items_hoy, "items_deuda": items_deuda, "total_tratamiento_hoy": total_tratamiento_hoy, "total_pagado_hoy": total_pagado_hoy, "saldo_total_global": saldo_total_global }
                         pdf_bytes = crear_recibo_pago(datos_pdf); clean_name = f"RECIBO_{datos_pdf['folio']}.pdf"; st.download_button("📥 Bajar PDF", pdf_bytes, clean_name, "application/pdf")
                 else: st.info("No hay movimientos financieros registrados.")
+    
+    # [V41.0] MENU FARMACIA
+    elif menu == "4. Farmacia & Recetas":
+        st.title("💊 Farmacia Clínica")
+        if 'id_paciente_activo' in st.session_state and st.session_state.id_paciente_activo:
+            id_p = st.session_state.id_paciente_activo
+            p = pd.read_sql(f"SELECT * FROM pacientes WHERE id_paciente='{id_p}'", conn).iloc[0]
+            edad, _ = calcular_edad_completa(p['fecha_nacimiento'])
+            
+            with st.container(border=True):
+                c1, c2 = st.columns(2)
+                doc_sel = c1.selectbox("Médico que Prescribe", ["Dr. Emmanuel", "Dra. Mónica"])
+                combo_sel = c2.selectbox("Combo Medicamento (Relleno Rápido)", list(MEDICAMENTOS_DB.keys()))
+                texto_medicamentos = st.text_area("Cuerpo de la Receta (Editable)", value=MEDICAMENTOS_DB[combo_sel], height=150)
+                indicacion_sel = st.selectbox("Hoja de Cuidados (Página 2)", list(INDICACIONES_DB.keys()))
+                texto_indicaciones = INDICACIONES_DB[indicacion_sel] 
+                
+                if st.button("🖨️ Generar Receta + Indicaciones (PDF)"):
+                    info_doc = DOCS_INFO[doc_sel]
+                    datos_receta = {
+                        "doctor_nombre": info_doc['nombre'], "doctor_cedula": info_doc['cedula'], "doctor_uni": info_doc['universidad'], "doctor_esp": info_doc['especialidad'],
+                        "paciente_nombre": f"{p['nombre']} {p['apellido_paterno']} {p['apellido_materno']}", "edad": edad, "fecha": get_fecha_mx(),
+                        "medicamentos": texto_medicamentos, "indicaciones": texto_indicaciones
+                    }
+                    pdf_bytes = crear_pdf_receta(datos_receta)
+                    st.download_button("Descargar PDF Receta", pdf_bytes, f"RECETA_{p['nombre']}.pdf", "application/pdf")
+        else: st.warning("⚠️ Seleccione un paciente en 'Gestión Pacientes' o 'Agenda' primero.")
 
-    elif menu == "4. Documentos & Firmas":
+    elif menu == "5. Documentos & Firmas":
         st.title("⚖️ Centro Legal"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
         if not df_p.empty:
             sel = st.selectbox("Paciente:", ["..."]+df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()); 
@@ -1008,7 +1186,7 @@ def vista_consultorio():
                             pdf_bytes = crear_pdf_consentimiento(nombre_paciente_full, doc_full, cedula_full, tipo_doc, tratamiento_legal, riesgo_legal, img_pac, img_doc, testigos_dict, nivel_riesgo, edad_actual, tutor_info); prefix = "CONSENTIMIENTO" if "Consentimiento" in tipo_doc else "AVISO_PRIVACIDAD"; clean_filename = f"{prefix}_{formato_nombre_legal(p_obj['nombre'])}_{formato_nombre_legal(p_obj['apellido_paterno'])}.pdf".replace(" ", "_"); st.download_button("Descargar PDF Firmado", pdf_bytes, clean_filename, "application/pdf")
                 else: st.warning("⚠️ No se genera documento legal para este concepto.")
 
-    elif menu == "5. Control Asistencia":
+    elif menu == "6. Control Asistencia":
         st.title("⏱️ Checador"); col_a, col_b = st.columns(2)
         with col_a:
             if st.button("Entrada Dr. Emmanuel"): ok, m = registrar_movimiento("Dr. Emmanuel", "Entrada"); st.success(m) if ok else st.warning(m)
