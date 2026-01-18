@@ -1058,14 +1058,16 @@ def vista_consultorio():
                         pdf_bytes = crear_pdf_receta(datos_receta); st.download_button("Descargar PDF Receta", pdf_bytes, f"RECETA_{p['nombre']}.pdf", "application/pdf")
             else: st.info("Seleccione un paciente para comenzar.")
 
-    elif menu == "3. Planes de Tratamiento":
-        # ... (Mantener V44 que funciona) ...
+elif menu == "3. Planes de Tratamiento":
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
+        
         if not pacientes.empty:
             sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()); id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]; st.session_state.id_paciente_activo = id_p
             st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
             tab_cobro, tab_abono = st.tabs(["🆕 Nuevo Plan / Tratamiento", "💳 Abonar a Deuda"])
+            
+            # [MEJORA V46.2] Eliminado st.form para permitir interactividad en el calendario
             with tab_cobro:
                 with st.container(border=True):
                     col_up1, col_up2, col_up3 = st.columns(3)
@@ -1076,19 +1078,36 @@ def vista_consultorio():
                     else: cat_sel = "Manual"; trat_sel = col_up2.text_input("Tratamiento"); precio_sug = 0.0; costo_lab = 0.0
                     doc_name = col_up3.selectbox("Doctor", LISTA_DOCTORES)
                     
-                    with st.form("cobro", clear_on_submit=True):
-                        c1, c2, c3 = st.columns(3); precio = c1.number_input("Precio", value=precio_sug, step=50.0); abono = c2.number_input("Abono", step=50.0); saldo = precio - abono; c3.metric("Saldo", f"${saldo:,.2f}")
-                        c4, c5, c6 = st.columns([1.5, 1, 1]); metodo = c4.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia", "Garantía", "Pendiente de Pago"]); num_sessions = c5.number_input("Sesiones", min_value=1, value=1); agendar = c6.checkbox("¿Agendar Cita?")
-                        if agendar: c7, c8 = st.columns(2); f_cita = c7.date_input("Fecha Cita", datetime.now(TZ_MX)); h_cita = c8.selectbox("Hora Cita", generar_slots_tiempo())
-                        else: f_cita = datetime.now(TZ_MX); h_cita = "00:00"
-                        notas = st.text_area("Notas Evolución", height=70)
-                        if st.form_submit_button("Registrar Cobro/Tratamiento"):
-                            if not notas.strip(): st.warning("⚠️ Guardando sin nota de evolución.")
-                            if metodo == "Garantía": abono = 0; saldo = 0; precio = 0 
-                            estatus = "Pagado" if saldo <= 0 else "Pendiente"; c = conn.cursor(); nota_final = formato_oracion(notas)
-                            c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, abono, saldo, get_fecha_mx(), costo_lab))
-                            if agendar: c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, estado_pago, categoria) VALUES (?,?,?,?,?,?,?,?,?,?)''', (int(time.time())+1, format_date_latino(f_cita), h_cita, id_p, nom_p, "Tratamiento", trat_sel, doc_name, "Pendiente", cat_sel))
-                            conn.commit(); st.success("Registrado"); time.sleep(1); st.rerun()
+                    # Inputs directos (Sin Formulario para reactividad)
+                    c1, c2, c3 = st.columns(3); precio = c1.number_input("Precio", value=precio_sug, step=50.0); abono = c2.number_input("Abono", step=50.0); saldo = precio - abono; c3.metric("Saldo", f"${saldo:,.2f}")
+                    c4, c5, c6 = st.columns([1.5, 1, 1]); metodo = c4.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia", "Garantía", "Pendiente de Pago"]); num_sessions = c5.number_input("Sesiones", min_value=1, value=1)
+                    
+                    # [FIX] Ahora esto es reactivo al instante
+                    agendar = c6.checkbox("¿Agendar Cita?")
+                    
+                    f_cita = datetime.now(TZ_MX); h_cita = "00:00"
+                    if agendar:
+                        st.info("📅 Configuración de la próxima cita:")
+                        c7, c8 = st.columns(2)
+                        f_cita = c7.date_input("Fecha Cita", datetime.now(TZ_MX))
+                        h_cita = c8.selectbox("Hora Cita", generar_slots_tiempo())
+                    
+                    notas = st.text_area("Notas Evolución", height=70)
+                    
+                    # Botón normal (no submit_button)
+                    if st.button("💾 Registrar Cobro/Tratamiento", type="primary", use_container_width=True):
+                        if not notas.strip(): st.warning("⚠️ Guardando sin nota de evolución.")
+                        if metodo == "Garantía": abono = 0; saldo = 0; precio = 0 
+                        estatus = "Pagado" if saldo <= 0 else "Pendiente"; c = conn.cursor(); nota_final = formato_oracion(notas)
+                        
+                        # 1. Registrar Finanza/Tratamiento
+                        c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, abono, saldo, get_fecha_mx(), costo_lab))
+                        
+                        # 2. Registrar Cita Futura (Si aplica)
+                        if agendar:
+                            c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, estado_pago, categoria, estatus_asistencia) VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (int(time.time())+1, format_date_latino(f_cita), h_cita, id_p, nom_p, "Tratamiento", trat_sel, doc_name, "Pendiente", cat_sel, "Programada"))
+                        
+                        conn.commit(); st.success("Registrado correctamente"); time.sleep(1); st.rerun()
 
             with tab_abono:
                  with st.container(border=True):
