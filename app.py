@@ -924,11 +924,11 @@ def vista_consultorio():
                         if c_m2.button("🗑️ Eliminar/Cancelar", type="primary"):
                              c = conn.cursor(); c.execute("UPDATE citas SET estado_pago='CANCELADO' WHERE rowid=?", (rid,)); conn.commit(); st.success("Cancelada"); st.rerun()
 
-        # === COLUMNA DERECHA: VISUALIZADOR DE SLOTS ===
+        # === COLUMNA DERECHA: VISUALIZADOR DE SLOTS (OPTIMIZADO) ===
         with col_cal2:
             st.markdown(f"#### 🗓️ Visual: {fecha_ver_str}")
             
-            # Lógica original de renderizado de huecos
+            # Preparar datos
             df_c = pd.read_sql("SELECT * FROM citas", conn)
             df_dia = df_c[df_c['fecha'] == fecha_ver_str]
             slots = generar_slots_tiempo()
@@ -941,10 +941,8 @@ def vista_consultorio():
                     h_inicio = r['hora']
                     try: dur = int(r['duracion']) if r['duracion'] and r['duracion'] > 0 else 30
                     except: dur = 30
-                    
                     try:
                         start_dt = datetime.strptime(h_inicio, "%H:%M")
-                        # Marcar bloques de 30 min
                         for i in range(0, dur, 30):
                             bloque_time = start_dt + timedelta(minutes=i)
                             bloque_str = bloque_time.strftime("%H:%M")
@@ -953,36 +951,49 @@ def vista_consultorio():
                                 else: ocupacion_map[bloque_str] = {"tipo": "bloqueado", "parent": r['nombre_paciente']}
                     except: pass
             
-            # Renderizado Gráfico
-            st.markdown("<div style='height: 600px; overflow-y: auto; padding-right: 5px;'>", unsafe_allow_html=True)
+            # [MEJORA V46.6] Construcción de HTML en un solo bloque para evitar espacios vacíos
+            html_agenda = """
+            <div style='
+                height: 600px; 
+                overflow-y: auto; 
+                padding: 10px; 
+                background-color: white; 
+                border-radius: 8px; 
+                border: 1px solid #ddd;
+            '>
+            """
+            
             for slot in slots:
                 if slot in ocupacion_map:
                     info = ocupacion_map[slot]
                     if info["tipo"] == "inicio": 
                         r = info["data"]
-                        # Color diferente si es Prospecto
                         color_border = "#FF5722" if "PROS" in str(r['id_paciente']) else "#002B5B"
-                        bg_c = "#e3f2fd" if r['estatus_asistencia'] == 'Asistió' else "#fff"
-                        
-                        st.markdown(f"""
-                        <div style="padding:8px; margin-bottom:2px; background-color:{bg_c}; border-left:5px solid {color_border}; border-radius:4px; font-size:0.9em; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                            <b>{slot}</b> | {r['nombre_paciente']}<br>
-                            <i style="color:#666;">{r['tratamiento']} ({info['dur']}m)</i>
-                        </div>""", unsafe_allow_html=True)
+                        bg_c = "#e3f2fd" if r['estatus_asistencia'] == 'Asistió' else "#f8f9fa"
+                        # Bloque de Cita
+                        html_agenda += f"""
+                        <div style="padding:10px; margin-bottom:5px; background-color:{bg_c}; border-left:5px solid {color_border}; border-radius:4px; font-size:0.9em; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                            <div style="font-weight:bold; color:#333;">{slot} | {r['nombre_paciente']}</div>
+                            <div style="color:#666; font-size:0.85em; margin-top:2px;">{r['tratamiento']} ({info['dur']}m)</div>
+                        </div>"""
                     else: 
-                        # Bloque ocupado por duración extendida
-                        st.markdown(f"""
-                        <div style="padding:5px; margin-bottom:2px; background-color:#f5f5f5; color:#aaa; font-size:0.8em; margin-left: 15px; border-left: 2px solid #ddd;">
+                        # Bloque Ocupado (Extensión)
+                        html_agenda += f"""
+                        <div style="padding:5px; margin-bottom:5px; background-color:#f1f1f1; color:#aaa; font-size:0.8em; margin-left: 15px; border-left: 2px solid #ddd; border-radius:0 4px 4px 0;">
                             ⬇️ <i>En tratamiento ({info['parent']})</i>
-                        </div>""", unsafe_allow_html=True)
+                        </div>"""
                 else: 
                     # Hueco Disponible
-                    st.markdown(f"""
-                    <div style="padding:8px; margin-bottom:2px; border-bottom:1px dashed #eee; display:flex; align-items:center;">
+                    html_agenda += f"""
+                    <div style="padding:8px; margin-bottom:5px; border-bottom:1px dashed #eee; display:flex; align-items:center; background-color: #fff;">
                         <span style="font-weight:bold; color:#4CAF50; width:60px;">{slot}</span>
                         <span style="color:#81C784; font-size:0.9em;">Disponible</span>
-                    </div>""", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+                    </div>"""
+            
+            html_agenda += "</div>"
+            
+            # Renderizar TODO el HTML de una sola vez (Esto elimina el espacio gigante)
+            st.markdown(html_agenda, unsafe_allow_html=True)
     
     elif menu == "2. Gestión Pacientes":
         st.title("📂 Expediente Clínico"); tab_b, tab_n, tab_e, tab_odo, tab_img = st.tabs(["🔍 BUSCAR", "➕ ALTA", "✏️ EDITAR", "🦷 ODONTOGRAMA", "📸 IMÁGENES"])
