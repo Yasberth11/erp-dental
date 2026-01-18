@@ -1058,7 +1058,7 @@ def vista_consultorio():
                         pdf_bytes = crear_pdf_receta(datos_receta); st.download_button("Descargar PDF Receta", pdf_bytes, f"RECETA_{p['nombre']}.pdf", "application/pdf")
             else: st.info("Seleccione un paciente para comenzar.")
 
-elif menu == "3. Planes de Tratamiento":
+    elif menu == "3. Planes de Tratamiento":
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         
