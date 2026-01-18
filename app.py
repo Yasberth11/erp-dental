@@ -482,7 +482,7 @@ def crear_pdf_receta(datos):
     
     # SEÑALES DE ALERTA (SIN EMOJIS)
     pdf.set_fill_color(255, 235, 238); pdf.set_text_color(200, 0, 0); pdf.set_font('Arial', 'B', 11)
-    pdf.cell(0, 8, "SENALES DE ALERTA", 1, 1, 'L', 1)
+    pdf.cell(0, 8, "SEÑALES DE ALERTA", 1, 1, 'L', 1)
     pdf.set_font('Arial', '', 10); pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 6, "Contacte al consultorio si presenta: Sangrado que no cede tras 40 min de presion, Fiebre >38 C, Dificultad para respirar/tragar, o Reaccion alergica (ronchas/hinchazon).")
     pdf.ln(5)
