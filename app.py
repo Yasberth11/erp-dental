@@ -829,16 +829,18 @@ def vista_consultorio():
             else:
                 st.info("☕ No hay citas programadas para hoy.")
 
-        st.divider()
+       st.divider()
 
-        # --- ZONA 2: GESTIÓN CLÁSICA ROBUSTA (MANTENIDA) ---
-        col_cal1, col_cal2 = st.columns([4, 3]) # 40% Gestión, 60% Visualizador
+        # --- ZONA 2: GESTIÓN CLÁSICA (MITAD IZQ) Y VISUAL (MITAD DER) ---
+        # [CAMBIO V46.5] Ajuste a [1, 1] para dividir la pantalla exactamente a la mitad
+        col_cal1, col_cal2 = st.columns([1, 1]) 
         
+        # === COLUMNA IZQUIERDA: FORMULARIOS ===
         with col_cal1:
             st.markdown("### 🛠️ Panel de Gestión")
             
             # Selector de Fecha para el visualizador
-            fecha_ver_obj = st.date_input("📅 Visualizar Fecha:", datetime.now(TZ_MX)); fecha_ver_str = format_date_latino(fecha_ver_obj)
+            fecha_ver_obj = st.date_input("Visualizar Fecha:", datetime.now(TZ_MX)); fecha_ver_str = format_date_latino(fecha_ver_obj)
             
             # 1. AGENDAR (Lógica Robusta original Restaurada)
             with st.expander("➕ Agendar Cita", expanded=False):
@@ -922,9 +924,9 @@ def vista_consultorio():
                         if c_m2.button("🗑️ Eliminar/Cancelar", type="primary"):
                              c = conn.cursor(); c.execute("UPDATE citas SET estado_pago='CANCELADO' WHERE rowid=?", (rid,)); conn.commit(); st.success("Cancelada"); st.rerun()
 
-        # --- ZONA VISUAL: EL SLOT RENDERER (ORIGINAL RESTAURADO) ---
+        # === COLUMNA DERECHA: VISUALIZADOR DE SLOTS ===
         with col_cal2:
-            st.markdown(f"#### 📅 Visual: {fecha_ver_str}")
+            st.markdown(f"#### 🗓️ Visual: {fecha_ver_str}")
             
             # Lógica original de renderizado de huecos
             df_c = pd.read_sql("SELECT * FROM citas", conn)
