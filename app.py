@@ -829,7 +829,7 @@ def vista_consultorio():
             else:
                 st.info("☕ No hay citas programadas para hoy.")
 
-       st.divider()
+    st.divider()
 
         # --- ZONA 2: GESTIÓN CLÁSICA (MITAD IZQ) Y VISUAL (MITAD DER) ---
         # [CAMBIO V46.5] Ajuste a [1, 1] para dividir la pantalla exactamente a la mitad
