@@ -452,7 +452,7 @@ def crear_pdf_receta(datos):
     pdf.set_font('Arial', 'B', 10); pdf.cell(15, 6, "EDAD:", 0, 0)
     # [V46.0] FIX AÑOS (CON Ñ FORZADA SI EL SISTEMA LO PERMITE, SINO NORMALIZADO)
     # Usamos normalización segura para evitar crash
-    edad_txt = f"{datos['edad']} ANOS"
+    edad_txt = f"{datos['edad']} AÑOS"
     pdf.set_font('Arial', '', 10); pdf.cell(30, 6, edad_txt, 0, 1) 
     pdf.ln(10)
     
