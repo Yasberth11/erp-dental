@@ -247,7 +247,8 @@ def format_date_latino(date_obj): return date_obj.strftime("%d/%m/%Y")
 def normalizar_texto_pdf(texto):
     if not texto: return ""
     texto = str(texto).upper().strip()
-    replacements = (("Á", "A"), ("É", "E"), ("Í", "I"), ("Ó", "O"), ("Ú", "U"), ("Ñ", "Ñ"), ("Ü", "Ü"))
+    # CAMBIO V46.1: ELIMINADA LA Ñ DE LA LISTA DE REEMPLAZOS
+    replacements = (("Á", "A"), ("É", "E"), ("Í", "I"), ("Ó", "O"), ("Ú", "U"), ("Ü", "U"))
     for a, b in replacements:
         texto = texto.replace(a, b)
     return texto
@@ -255,7 +256,8 @@ def normalizar_texto_pdf(texto):
 def formato_nombre_legal(texto):
     if not texto: return ""
     texto = str(texto).upper().strip()
-    for old, new in {'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U','Ü':'U','Ñ':'N'}.items(): 
+    # CAMBIO V46.1: Tambien permitimos Ñ en nombres legales eliminando el reemplazo
+    for old, new in {'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U','Ü':'U'}.items(): 
         texto = texto.replace(old, new)
     return " ".join(texto.split())
 
@@ -450,8 +452,7 @@ def crear_pdf_receta(datos):
     pdf.cell(30, 6, datos['fecha'], 0, 1)
     
     pdf.set_font('Arial', 'B', 10); pdf.cell(15, 6, "EDAD:", 0, 0)
-    # [V46.0] FIX AÑOS (CON Ñ FORZADA SI EL SISTEMA LO PERMITE, SINO NORMALIZADO)
-    # Usamos normalización segura para evitar crash
+    # [V46.1] FIX AÑOS (Ahora sí permitido)
     edad_txt = f"{datos['edad']} AÑOS"
     pdf.set_font('Arial', '', 10); pdf.cell(30, 6, edad_txt, 0, 1) 
     pdf.ln(10)
