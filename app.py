@@ -26,11 +26,13 @@ LOGO_UNAM = "logo_unam.png"
 DIRECCION_CONSULTORIO = "CALLE EL CHILAR S/N, SAN MATEO XOLOC, TEPOTZOTLÁN, ESTADO DE MÉXICO"
 CARPETA_PACIENTES = "pacientes_files"
 
-# Asegurar directorio de archivos
-if not os.path.exists(CARPETA_PACIENTES):
-    os.makedirs(CARPETA_PACIENTES)
+if not os.path.exists(CARPETA_PACIENTES): os.makedirs(CARPETA_PACIENTES)
 
-# CONSTANTES DOCTORES (ORDEN: DRA. MONICA PRIMERO)
+# ==========================================
+# 2. DATOS MAESTROS
+# ==========================================
+
+# [CAMBIO] Orden Dra. Mónica primero
 DOCS_INFO = {
     "Dra. Mónica": {
         "nombre": "Dra. Monica Montserrat Rodriguez Alvarez", 
@@ -45,14 +47,12 @@ DOCS_INFO = {
         "especialidad": "Cirujano Dentista"
     }
 }
-# Lista para Dropdowns (Mónica First)
-LISTA_DOCTORES = ["Dra. Mónica", "Dr. Emmanuel"]
+LISTA_DOCTORES = list(DOCS_INFO.keys())
 
-# LISTAS MAESTRAS
 LISTA_OCUPACIONES = ["Estudiante", "Empleado/a", "Empresario/a", "Hogar", "Comerciante", "Docente", "Sector Salud", "Jubilado/a", "Desempleado/a", "Otro"]
 LISTA_PARENTESCOS = ["Madre", "Padre", "Abuelo(a)", "Tío(a)", "Hermano(a) Mayor", "Tutor Legal Designado", "Otro"]
 
-# BASES DE DATOS DE TEXTOS
+# TEXTOS LEGALES Y MEDICOS (NO ELIMINADOS, INTEGROS V41)
 CLAUSULA_CIERRE = "Adicionalmente, entiendo que pueden presentarse eventos imprevisibles en cualquier acto médico, tales como: reacciones alérgicas a los anestésicos o materiales (incluso si no tengo antecedentes conocidos), síncope (desmayo), trismus (dificultad para abrir la boca), hematomas, o infecciones secundarias. Acepto que el éxito del tratamiento depende también de mi biología y de seguir estrictamente las indicaciones post-operatorias."
 TXT_DATOS_SENSIBLES = "DATOS PERSONALES SENSIBLES: Además de los datos de identificación, y para cumplir con la Normatividad Sanitaria (NOM-004-SSA3-2012 y NOM-013-SSA2-2015), recabamos: Estado de salud presente, pasado y futuro; Antecedentes Heredo-Familiares y Patológicos; Historial Farmacológico y Alergias; Hábitos de vida (tabaquismo/alcoholismo); e Imágenes diagnósticas/Biometría."
 TXT_CONSENTIMIENTO_EXPRESO = "CONSENTIMIENTO EXPRESO: De conformidad con el artículo 9 de la LFPDPPP, otorgo mi consentimiento expreso para el tratamiento de mis datos sensibles. Reconozco que la firma digital en este documento tiene plena validez legal, equiparándose a mi firma autógrafa."
@@ -87,6 +87,7 @@ INDICACIONES_DB = {
 3. Acuda a sus revisiones semestrales."""
 }
 
+# SE MANTIENE RIESGOS_DB DE V41
 RIESGOS_DB = {
     "Profilaxis (Limpieza Ultrasónica)": "Sensibilidad dental transitoria (frio/calor); sangrado leve de encías debido a la inflamación previa; desalojo de restauraciones antiguas que estuvieran desajustadas; molestia en cuellos dentales expuestos.",
     "Aplicación de Flúor (Niños)": "Náuseas leves o malestar estomacal en caso de ingestión accidental; sabor desagradable momentáneo.",
@@ -117,103 +118,35 @@ RIESGOS_DB = {
     "Garantía (Retoque/Reparación)": "La garantía aplica exclusivamente sobre defectos de laboratorio o fractura de material por vicio oculto. NO cubre: nuevas caries, fracturas por traumatismos (golpes, caídas), ni fracasos derivados de mala higiene o inasistencia a citas de revisión."
 }
 
-def cargar_estilo_royal():
-    st.markdown("""
-        <style>
-        .stApp { background-color: #F4F6F6; }
-        .royal-card { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid #D4AF37; margin-bottom: 20px; }
-        .sticky-header { position: fixed; top: 0; left: 0; width: 100%; z-index: 99999; color: white; padding: 15px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.3); font-family: 'Helvetica Neue', sans-serif; transition: background-color 0.3s; }
-        .alerta-medica { background-color: #FFEBEE; color: #D32F2F; padding: 20px; border-radius: 8px; border: 3px solid #D32F2F; font-weight: 900; font-size: 1.4em; text-align: center; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 15px; text-transform: uppercase; }
-        .alerta-activa { animation: pulse-red 2s infinite; }
-        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(211, 47, 47, 0); } 100% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0); } }
-        h1, h2, h3, h4 { color: #002B5B !important; font-family: 'Helvetica Neue', sans-serif; }
-        .stButton>button { background-color: #D4AF37; color: #002B5B; border: none; font-weight: bold; width: 100%; transition: all 0.3s; }
-        .stButton>button:hover { background-color: #B5952F; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-        input[type=number] { text-align: right; }
-        div[data-testid="column"] { display: flex; flex-direction: column; justify-content: flex-end; }
-        #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-        </style>
-    """, unsafe_allow_html=True)
-
-cargar_estilo_royal()
-
 # ==========================================
-# 2. MOTOR DE BASE DE DATOS
-# ==========================================
-DB_FILE = "royal_dental_db.sqlite"
-
-def get_db_connection():
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    conn.row_factory = sqlite3.Row 
-    return conn
-
-def migrar_tablas():
-    conn = get_db_connection()
-    c = conn.cursor()
-    # [V41.0] MIGRACIÓN DE TABLA CITAS (NUEVO STATUS) Y ODONTOGRAMA
-    try: c.execute(f"ALTER TABLE citas ADD COLUMN estatus_asistencia TEXT")
-    except: pass
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS odontograma (
-        id_paciente TEXT, diente TEXT, estado TEXT, fecha_actualizacion TEXT,
-        PRIMARY KEY (id_paciente, diente))''')
-
-    # Migraciones previas (Seguridad)
-    try: c.execute(f"ALTER TABLE servicios ADD COLUMN duracion INTEGER")
-    except: pass
-    try: c.execute(f"ALTER TABLE citas ADD COLUMN duracion INTEGER")
-    except: pass
-    
-    # Columnas pacientes
-    for col in ['parentesco_tutor', 'telefono_emergencia', 'antecedentes_medicos', 'ahf', 'app', 'apnp', 'sexo', 'domicilio', 'tutor', 'contacto_emergencia', 'ocupacion', 'estado_civil', 'motivo_consulta', 'exploracion_fisica', 'diagnostico']:
-        try: c.execute(f"ALTER TABLE pacientes ADD COLUMN {col} TEXT")
-        except: pass
-    
-    # Columnas citas
-    for col in ['costo_laboratorio', 'categoria']:
-        try: c.execute(f"ALTER TABLE citas ADD COLUMN {col} REAL" if col == 'costo_laboratorio' else f"ALTER TABLE citas ADD COLUMN {col} TEXT")
-        except: pass
-    
-    try: c.execute(f"ALTER TABLE servicios ADD COLUMN consent_level TEXT")
-    except: pass
-    conn.commit(); conn.close()
-
-def init_db():
-    conn = get_db_connection()
-    c = conn.cursor()
-    # Tablas base (Pacientes, Citas, Auditoria, Asistencia, Servicios, Odontograma)
-    c.execute('''CREATE TABLE IF NOT EXISTS pacientes (id_paciente TEXT PRIMARY KEY, fecha_registro TEXT, nombre TEXT, apellido_paterno TEXT, apellido_materno TEXT, telefono TEXT, email TEXT, rfc TEXT, regimen TEXT, uso_cfdi TEXT, cp TEXT, nota_fiscal TEXT, sexo TEXT, estado TEXT, fecha_nacimiento TEXT, antecedentes_medicos TEXT, ahf TEXT, app TEXT, apnp TEXT, domicilio TEXT, tutor TEXT, parentesco_tutor TEXT, contacto_emergencia TEXT, telefono_emergencia TEXT, ocupacion TEXT, estado_civil TEXT, motivo_consulta TEXT, exploracion_fisica TEXT, diagnostico TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS citas (timestamp INTEGER, fecha TEXT, hora TEXT, id_paciente TEXT, nombre_paciente TEXT, tipo TEXT, tratamiento TEXT, diente TEXT, doctor_atendio TEXT, precio_lista REAL, precio_final REAL, porcentaje REAL, tiene_factura TEXT, iva REAL, subtotal REAL, metodo_pago TEXT, estado_pago TEXT, requiere_factura TEXT, notas TEXT, monto_pagado REAL, saldo_pendiente REAL, fecha_pago TEXT, costo_laboratorio REAL, categoria TEXT, duracion INTEGER, estatus_asistencia TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS auditoria (id_evento INTEGER PRIMARY KEY AUTOINCREMENT, fecha_evento TEXT, usuario TEXT, accion TEXT, detalle TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS asistencia (id_registro INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, doctor TEXT, hora_entrada TEXT, hora_salida TEXT, horas_totales REAL, estado TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS servicios (categoria TEXT, nombre_tratamiento TEXT, precio_lista REAL, costo_laboratorio_base REAL, consent_level TEXT, duracion INTEGER)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS odontograma (id_paciente TEXT, diente TEXT, estado TEXT, fecha_actualizacion TEXT, PRIMARY KEY (id_paciente, diente))''')
-    conn.commit(); conn.close()
-
-def seed_data():
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT count(*) FROM servicios")
-    if c.fetchone()[0] == 0:
-        # Tratamientos y duraciones por defecto
-        tratamientos = [("Preventiva", "Profilaxis (Limpieza Ultrasónica)", 600.0, 0.0, 'LOW_RISK', 30),("Preventiva", "Aplicación de Flúor (Niños)", 350.0, 0.0, 'LOW_RISK', 30),("Preventiva", "Sellador de Fosetas y Fisuras", 400.0, 0.0, 'LOW_RISK', 30),("Operatoria", "Resina Simple (1 cara)", 800.0, 0.0, 'LOW_RISK', 45),("Operatoria", "Resina Compuesta (2 o más caras)", 1200.0, 0.0, 'LOW_RISK', 60),("Operatoria", "Reconstrucción de Muñón", 1500.0, 0.0, 'LOW_RISK', 60),("Operatoria", "Curación Temporal (Cavit)", 300.0, 0.0, 'LOW_RISK', 30),("Cirugía", "Extracción Simple", 900.0, 0.0, 'HIGH_RISK', 60),("Cirugía", "Cirugía de Tercer Molar (Muela del Juicio)", 3500.0, 0.0, 'HIGH_RISK', 90),("Cirugía", "Drenaje de Absceso", 800.0, 0.0, 'HIGH_RISK', 45),("Endodoncia", "Endodoncia Anterior (1 conducto)", 2800.0, 0.0, 'HIGH_RISK', 90),("Endodoncia", "Endodoncia Premolar (2 conductos)", 3200.0, 0.0, 'HIGH_RISK', 90),("Endodoncia", "Endodoncia Molar (3+ conductos)", 4200.0, 0.0, 'HIGH_RISK', 120),("Prótesis Fija", "Corona Zirconia", 4800.0, 900.0, 'HIGH_RISK', 90),("Prótesis Fija", "Corona Metal-Porcelana", 3500.0, 600.0, 'HIGH_RISK', 90),("Prótesis Fija", "Incrustación Estética", 3800.0, 700.0, 'HIGH_RISK', 90),("Prótesis Fija", "Carilla de Porcelana", 5500.0, 1100.0, 'HIGH_RISK', 90),("Prótesis Fija", "Poste de Fibra de Vidrio", 1200.0, 0.0, 'HIGH_RISK', 60),("Prótesis Removible", "Placa Total (Acrílico) - Una arcada", 6000.0, 1200.0, 'LOW_RISK', 30),("Prótesis Removible", "Prótesis Flexible (Valplast) - Unilateral", 4500.0, 900.0, 'LOW_RISK', 30),("Estética", "Blanqueamiento (Consultorio 2 sesiones)", 3500.0, 300.0, 'LOW_RISK', 90),("Estética", "Blanqueamiento (Guardas en casa)", 2500.0, 500.0, 'LOW_RISK', 30),("Ortodoncia", "Pago Inicial (Brackets Metálicos)", 4000.0, 1500.0, 'HIGH_RISK', 60),("Ortodoncia", "Mensualidad Ortodoncia", 700.0, 0.0, 'NO_CONSENT', 30),("Ortodoncia", "Recolocación de Bracket (Reposición)", 200.0, 0.0, 'NO_CONSENT', 30),("Pediatría", "Pulpotomía", 1500.0, 0.0, 'HIGH_RISK', 60),("Pediatría", "Corona Acero-Cromo", 1800.0, 0.0, 'HIGH_RISK', 60),("Garantía", "Garantía (Retoque/Reparación)", 0.0, 0.0, 'NO_CONSENT', 30)]
-        c.executemany("INSERT INTO servicios (categoria, nombre_tratamiento, precio_lista, costo_laboratorio_base, consent_level, duracion) VALUES (?,?,?,?,?,?)", tratamientos)
-        conn.commit()
-    conn.close()
-
-init_db(); migrar_tablas(); seed_data()
-
-# ==========================================
-# 3. HELPERS (FUNCIONES DE AYUDA RESTAURADAS)
+# 3. HELPERS (FUNCIONES DE AYUDA)
 # ==========================================
 def get_fecha_mx(): return datetime.now(TZ_MX).strftime("%d/%m/%Y")
+def get_hora_mx(): return datetime.now(TZ_MX).strftime("%H:%M:%S")
 def format_date_latino(date_obj): return date_obj.strftime("%d/%m/%Y")
-def formato_nombre_legal(texto): return " ".join(str(texto).upper().strip().split()) if texto else ""
+
+# [CAMBIO] Función para normalizar texto a MAYUSCULAS SIN ACENTOS (Para PDF)
+def normalizar_texto_pdf(texto):
+    if not texto: return ""
+    texto = str(texto).upper().strip()
+    replacements = (("Á", "A"), ("É", "E"), ("Í", "I"), ("Ó", "O"), ("Ú", "U"), ("Ñ", "N"), ("Ü", "U"))
+    for a, b in replacements:
+        texto = texto.replace(a, b)
+    return texto
+
+def formato_nombre_legal(texto):
+    if not texto: return ""
+    texto = str(texto).upper().strip()
+    # Mantenemos acentos para visualización en pantalla, pero normalizamos espacios
+    for old, new in {'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U','Ü':'U','Ñ':'N'}.items(): 
+        texto = texto.replace(old, new)
+    return " ".join(texto.split())
+
+def formato_titulo(texto): return str(texto).strip().title() if texto else ""
 def formato_oracion(texto): return str(texto).strip().capitalize() if texto else ""
 def limpiar_email(texto): return texto.lower().strip() if texto else ""
 
 def format_tel_visual(tel): 
-    # [V42.1] Restaurada
     return f"{tel[:2]}-{tel[2:6]}-{tel[6:]}" if tel and len(tel)==10 else tel
 
 def calcular_edad_completa(nacimiento_input):
@@ -240,14 +173,73 @@ def generar_slots_tiempo():
     while h <= end: slots.append(h.strftime("%H:%M")); h += timedelta(minutes=30)
     return slots
 
-def get_regimenes_fiscales(): 
-    # [V42.1] Restaurada
-    return ["605 - Sueldos y Salarios", "612 - PFAEP (Actividad Empresarial)", "626 - RESICO", "616 - Sin obligaciones fiscales", "601 - General de Ley Personas Morales"]
+def get_regimenes_fiscales(): return ["605 - Sueldos y Salarios", "612 - PFAEP (Actividad Empresarial)", "626 - RESICO", "616 - Sin obligaciones fiscales", "601 - General de Ley Personas Morales"]
+def get_usos_cfdi(): return ["D01 - Honorarios médicos, dentales", "S01 - Sin efectos fiscales", "G03 - Gastos en general", "CP01 - Pagos"]
 
-def get_usos_cfdi(): 
-    # [V42.1] Restaurada
-    return ["D01 - Honorarios médicos, dentales", "S01 - Sin efectos fiscales", "G03 - Gastos en general", "CP01 - Pagos"]
+def calcular_rfc_10(nombre, paterno, materno, nacimiento):
+    try:
+        nombre = formato_nombre_legal(nombre); paterno = formato_nombre_legal(paterno); materno = formato_nombre_legal(materno)
+        fecha = datetime.strptime(str(nacimiento), "%Y-%m-%d")
+        letra1 = paterno[0]; vocales = [c for c in paterno[1:] if c in "AEIOU"]; letra2 = vocales[0] if vocales else "X"
+        letra3 = materno[0] if materno else "X"
+        nombres = nombre.split(); letra4 = nombres[1][0] if len(nombres) > 1 and nombres[0] in ["JOSE", "MARIA", "MA.", "MA", "J."] else nombre[0]
+        fecha_str = fecha.strftime("%y%m%d"); rfc_base = f"{letra1}{letra2}{letra3}{letra4}{fecha_str}".upper()
+        if rfc_base[:4] in ["PUTO", "PITO", "CULO", "MAME"]: rfc_base = f"{rfc_base[:3]}X{rfc_base[4:]}"
+        return rfc_base
+    except: return ""
 
+# ==========================================
+# 4. MOTOR DE BASE DE DATOS (MISMAS FUNCIONES V41)
+# ==========================================
+DB_FILE = "royal_dental_db.sqlite"
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn.row_factory = sqlite3.Row 
+    return conn
+
+def migrar_tablas():
+    conn = get_db_connection(); c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS odontograma (id_paciente TEXT, diente TEXT, estado TEXT, fecha_actualizacion TEXT, PRIMARY KEY (id_paciente, diente))''')
+    try: c.execute(f"ALTER TABLE citas ADD COLUMN estatus_asistencia TEXT")
+    except: pass
+    try: c.execute(f"ALTER TABLE servicios ADD COLUMN duracion INTEGER")
+    except: pass
+    try: c.execute(f"ALTER TABLE citas ADD COLUMN duracion INTEGER")
+    except: pass
+    for col in ['parentesco_tutor', 'telefono_emergencia', 'antecedentes_medicos', 'ahf', 'app', 'apnp', 'sexo', 'domicilio', 'tutor', 'contacto_emergencia', 'ocupacion', 'estado_civil', 'motivo_consulta', 'exploracion_fisica', 'diagnostico']:
+        try: c.execute(f"ALTER TABLE pacientes ADD COLUMN {col} TEXT")
+        except: pass
+    for col in ['costo_laboratorio', 'categoria']:
+        try: c.execute(f"ALTER TABLE citas ADD COLUMN {col} REAL" if col == 'costo_laboratorio' else f"ALTER TABLE citas ADD COLUMN {col} TEXT")
+        except: pass
+    try: c.execute(f"ALTER TABLE servicios ADD COLUMN consent_level TEXT")
+    except: pass
+    conn.commit(); conn.close()
+
+def init_db():
+    conn = get_db_connection(); c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS pacientes (id_paciente TEXT PRIMARY KEY, fecha_registro TEXT, nombre TEXT, apellido_paterno TEXT, apellido_materno TEXT, telefono TEXT, email TEXT, rfc TEXT, regimen TEXT, uso_cfdi TEXT, cp TEXT, nota_fiscal TEXT, sexo TEXT, estado TEXT, fecha_nacimiento TEXT, antecedentes_medicos TEXT, ahf TEXT, app TEXT, apnp TEXT, domicilio TEXT, tutor TEXT, parentesco_tutor TEXT, contacto_emergencia TEXT, telefono_emergencia TEXT, ocupacion TEXT, estado_civil TEXT, motivo_consulta TEXT, exploracion_fisica TEXT, diagnostico TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS citas (timestamp INTEGER, fecha TEXT, hora TEXT, id_paciente TEXT, nombre_paciente TEXT, tipo TEXT, tratamiento TEXT, diente TEXT, doctor_atendio TEXT, precio_lista REAL, precio_final REAL, porcentaje REAL, tiene_factura TEXT, iva REAL, subtotal REAL, metodo_pago TEXT, estado_pago TEXT, requiere_factura TEXT, notas TEXT, monto_pagado REAL, saldo_pendiente REAL, fecha_pago TEXT, costo_laboratorio REAL, categoria TEXT, duracion INTEGER, estatus_asistencia TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS auditoria (id_evento INTEGER PRIMARY KEY AUTOINCREMENT, fecha_evento TEXT, usuario TEXT, accion TEXT, detalle TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS asistencia (id_registro INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, doctor TEXT, hora_entrada TEXT, hora_salida TEXT, horas_totales REAL, estado TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS servicios (categoria TEXT, nombre_tratamiento TEXT, precio_lista REAL, costo_laboratorio_base REAL, consent_level TEXT, duracion INTEGER)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS odontograma (id_paciente TEXT, diente TEXT, estado TEXT, fecha_actualizacion TEXT, PRIMARY KEY (id_paciente, diente))''')
+    conn.commit(); conn.close()
+
+def seed_data():
+    conn = get_db_connection(); c = conn.cursor(); c.execute("SELECT count(*) FROM servicios")
+    if c.fetchone()[0] == 0:
+        tratamientos = [("Preventiva", "Profilaxis (Limpieza Ultrasónica)", 600.0, 0.0, 'LOW_RISK', 30),("Preventiva", "Aplicación de Flúor (Niños)", 350.0, 0.0, 'LOW_RISK', 30),("Preventiva", "Sellador de Fosetas y Fisuras", 400.0, 0.0, 'LOW_RISK', 30),("Operatoria", "Resina Simple (1 cara)", 800.0, 0.0, 'LOW_RISK', 45),("Operatoria", "Resina Compuesta (2 o más caras)", 1200.0, 0.0, 'LOW_RISK', 60),("Operatoria", "Reconstrucción de Muñón", 1500.0, 0.0, 'LOW_RISK', 60),("Operatoria", "Curación Temporal (Cavit)", 300.0, 0.0, 'LOW_RISK', 30),("Cirugía", "Extracción Simple", 900.0, 0.0, 'HIGH_RISK', 60),("Cirugía", "Cirugía de Tercer Molar (Muela del Juicio)", 3500.0, 0.0, 'HIGH_RISK', 90),("Cirugía", "Drenaje de Absceso", 800.0, 0.0, 'HIGH_RISK', 45),("Endodoncia", "Endodoncia Anterior (1 conducto)", 2800.0, 0.0, 'HIGH_RISK', 90),("Endodoncia", "Endodoncia Premolar (2 conductos)", 3200.0, 0.0, 'HIGH_RISK', 90),("Endodoncia", "Endodoncia Molar (3+ conductos)", 4200.0, 0.0, 'HIGH_RISK', 120),("Prótesis Fija", "Corona Zirconia", 4800.0, 900.0, 'HIGH_RISK', 90),("Prótesis Fija", "Corona Metal-Porcelana", 3500.0, 600.0, 'HIGH_RISK', 90),("Prótesis Fija", "Incrustación Estética", 3800.0, 700.0, 'HIGH_RISK', 90),("Prótesis Fija", "Carilla de Porcelana", 5500.0, 1100.0, 'HIGH_RISK', 90),("Prótesis Fija", "Poste de Fibra de Vidrio", 1200.0, 0.0, 'HIGH_RISK', 60),("Prótesis Removible", "Placa Total (Acrílico) - Una arcada", 6000.0, 1200.0, 'LOW_RISK', 30),("Prótesis Removible", "Prótesis Flexible (Valplast) - Unilateral", 4500.0, 900.0, 'LOW_RISK', 30),("Estética", "Blanqueamiento (Consultorio 2 sesiones)", 3500.0, 300.0, 'LOW_RISK', 90),("Estética", "Blanqueamiento (Guardas en casa)", 2500.0, 500.0, 'LOW_RISK', 30),("Ortodoncia", "Pago Inicial (Brackets Metálicos)", 4000.0, 1500.0, 'HIGH_RISK', 60),("Ortodoncia", "Mensualidad Ortodoncia", 700.0, 0.0, 'NO_CONSENT', 30),("Ortodoncia", "Recolocación de Bracket (Reposición)", 200.0, 0.0, 'NO_CONSENT', 30),("Pediatría", "Pulpotomía", 1500.0, 0.0, 'HIGH_RISK', 60),("Pediatría", "Corona Acero-Cromo", 1800.0, 0.0, 'HIGH_RISK', 60),("Garantía", "Garantía (Retoque/Reparación)", 0.0, 0.0, 'NO_CONSENT', 30)]
+        c.executemany("INSERT INTO servicios (categoria, nombre_tratamiento, precio_lista, costo_laboratorio_base, consent_level, duracion) VALUES (?,?,?,?,?,?)", tratamientos)
+        conn.commit()
+    conn.close()
+
+init_db(); migrar_tablas(); seed_data();
+
+# ==========================================
+# 5. FUNCIONES LÓGICAS (DB & GESTIÓN)
+# ==========================================
 def verificar_disponibilidad(fecha, hora, duracion=30):
     conn = get_db_connection(); c = conn.cursor()
     c.execute("SELECT hora, duracion FROM citas WHERE fecha=? AND estado_pago != 'CANCELADO' AND (estatus_asistencia != 'Canceló' OR estatus_asistencia IS NULL)", (fecha,))
@@ -263,17 +255,19 @@ def verificar_disponibilidad(fecha, hora, duracion=30):
         return False
     except: return True
 
-def calcular_rfc_10(nombre, paterno, materno, nacimiento):
-    try:
-        nombre = formato_nombre_legal(nombre); paterno = formato_nombre_legal(paterno); materno = formato_nombre_legal(materno)
-        fecha = datetime.strptime(str(nacimiento), "%Y-%m-%d")
-        letra1 = paterno[0]; vocales = [c for c in paterno[1:] if c in "AEIOU"]; letra2 = vocales[0] if vocales else "X"
-        letra3 = materno[0] if materno else "X"
-        nombres = nombre.split(); letra4 = nombres[1][0] if len(nombres) > 1 and nombres[0] in ["JOSE", "MARIA", "MA.", "MA", "J."] else nombre[0]
-        fecha_str = fecha.strftime("%y%m%d"); rfc_base = f"{letra1}{letra2}{letra3}{letra4}{fecha_str}".upper()
-        if rfc_base[:4] in ["PUTO", "PITO", "CULO", "MAME"]: rfc_base = f"{rfc_base[:3]}X{rfc_base[4:]}"
-        return rfc_base
-    except: return ""
+def actualizar_diente(id_paciente, diente):
+    conn = get_db_connection(); c = conn.cursor()
+    estados = ["Sano", "Caries", "Resina", "Ausente", "Corona"]
+    c.execute("SELECT estado FROM odontograma WHERE id_paciente=? AND diente=?", (id_paciente, diente))
+    row = c.fetchone(); estado_actual = row[0] if row else "Sano"
+    nuevo_estado = estados[(estados.index(estado_actual) + 1) % len(estados)]
+    c.execute("INSERT OR REPLACE INTO odontograma (id_paciente, diente, estado, fecha_actualizacion) VALUES (?,?,?,?)", (id_paciente, diente, nuevo_estado, get_fecha_mx()))
+    conn.commit(); conn.close()
+
+def obtener_estado_dientes(id_paciente):
+    conn = get_db_connection(); c = conn.cursor()
+    c.execute("SELECT diente, estado FROM odontograma WHERE id_paciente=?", (id_paciente,))
+    data = dict(c.fetchall()); conn.close(); return data
 
 def registrar_auditoria(usuario, accion, detalle):
     try:
@@ -303,152 +297,186 @@ def registrar_movimiento(doctor, tipo):
     except Exception as e: return False, str(e)
     finally: conn.close()
 
-# [V41.0] GESTOR DE ODONTOGRAMA
-def actualizar_diente(id_paciente, diente):
-    conn = get_db_connection(); c = conn.cursor()
-    # Ciclo de estados
-    estados = ["Sano", "Caries", "Resina", "Ausente", "Corona"]
-    c.execute("SELECT estado FROM odontograma WHERE id_paciente=? AND diente=?", (id_paciente, diente))
-    row = c.fetchone(); estado_actual = row[0] if row else "Sano"
-    
-    nuevo_estado = estados[(estados.index(estado_actual) + 1) % len(estados)]
-    c.execute("INSERT OR REPLACE INTO odontograma (id_paciente, diente, estado, fecha_actualizacion) VALUES (?,?,?,?)", (id_paciente, diente, nuevo_estado, get_fecha_mx()))
-    conn.commit(); conn.close()
-
-def obtener_estado_dientes(id_paciente):
-    conn = get_db_connection(); c = conn.cursor()
-    c.execute("SELECT diente, estado FROM odontograma WHERE id_paciente=?", (id_paciente,))
-    data = dict(c.fetchall()); conn.close(); return data
-
 # ==========================================
-# 5. GENERADORES PDF (LEGAL & RECETA)
+# 6. GENERADORES PDF
 # ==========================================
 class PDFGenerator(FPDF):
     def __init__(self): super().__init__()
     def header(self):
-        # [V42.0] LOGOS AJUSTADOS
-        if os.path.exists(LOGO_FILE): self.image(LOGO_FILE, 10, 8, 50) 
-        if os.path.exists(LOGO_UNAM): self.image(LOGO_UNAM, 170, 8, 25) 
+        if os.path.exists(LOGO_FILE): self.image(LOGO_FILE, 10, 8, 50)
+        if os.path.exists(LOGO_UNAM): self.image(LOGO_UNAM, 170, 8, 25)
         self.set_font('Arial', 'B', 14); self.set_text_color(0, 43, 91)
         self.cell(0, 10, 'ROYAL DENTAL', 0, 1, 'C'); self.ln(1)
         self.set_font('Arial', 'I', 9); self.set_text_color(100, 100, 100)
         self.cell(0, 5, DIRECCION_CONSULTORIO, 0, 1, 'C'); self.ln(10)
     def footer(self):
         self.set_y(-15); self.set_font('Arial', 'I', 8); self.set_text_color(128, 128, 128)
-        self.cell(0, 10, f'Página {self.page_no()} - Documento Oficial Royal Dental', 0, 0, 'C')
-    def chapter_body(self, body, style=''):
-        self.set_font('Arial', style, 10); self.set_text_color(0, 0, 0); self.multi_cell(0, 5, body); self.ln(2)
+        self.cell(0, 10, f'Pagina {self.page_no()} - Documento Oficial Royal Dental', 0, 0, 'C')
 
-def procesar_firma_digital(firma_img_data):
-    try:
-        img_data = re.sub('^data:image/.+;base64,', '', firma_img_data)
-        img = Image.open(io.BytesIO(base64.b64decode(img_data)))
-        temp_filename = f"temp_sig_{int(time.time())}_{random.randint(1,1000)}.png"
-        img.save(temp_filename)
-        return temp_filename
-    except: return None
-
-# [V42.0] PDF RECETA FIX (SIN EMOJIS)
+# [CAMBIO] Función para crear la receta usando normalización
 def crear_pdf_receta(datos):
     pdf = PDFGenerator()
+    # PÁGINA 1
+    pdf.add_page(); pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, "RECETA MEDICA", 0, 1, 'R'); pdf.ln(5)
     
-    # --- PÁGINA 1: RECETA MÉDICA ---
-    pdf.add_page()
-    pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, "RECETA MEDICA", 0, 1, 'R')
-    pdf.ln(5)
-    
-    # Datos Doctor
-    pdf.set_font('Arial', 'B', 10); pdf.set_text_color(0, 0, 0)
-    pdf.cell(0, 5, datos['doctor_nombre'], 0, 1)
+    # Doctor (Normalizado)
+    pdf.set_font('Arial', 'B', 10); pdf.set_text_color(0,0,0)
+    pdf.cell(0, 5, normalizar_texto_pdf(datos['doctor_nombre']), 0, 1)
     pdf.set_font('Arial', '', 9)
-    pdf.cell(0, 5, f"{datos['doctor_uni']} - Ced. Prof: {datos['doctor_cedula']}", 0, 1)
-    pdf.cell(0, 5, f"Especialidad: {datos['doctor_esp']}", 0, 1)
-    
+    pdf.cell(0, 5, f"{normalizar_texto_pdf(datos['doctor_uni'])} - CED. PROF: {datos['doctor_cedula']}", 0, 1)
+    pdf.cell(0, 5, f"ESPECIALIDAD: {normalizar_texto_pdf(datos['doctor_esp'])}", 0, 1)
     pdf.line(10, pdf.get_y()+2, 200, pdf.get_y()+2); pdf.ln(10)
     
-    # Datos Paciente (FIX AÑOS)
-    pdf.set_font('Arial', 'B', 10)
-    pdf.cell(20, 6, "Paciente:", 0, 0); pdf.set_font('Arial', '', 10)
-    pdf.cell(100, 6, datos['paciente_nombre'], 0, 0)
-    pdf.set_font('Arial', 'B', 10)
-    pdf.cell(15, 6, "Fecha:", 0, 0); pdf.set_font('Arial', '', 10)
-    pdf.cell(30, 6, datos['fecha'], 0, 1)
+    # Paciente (Normalizado)
+    pdf.set_font('Arial', 'B', 10); pdf.cell(20, 6, "PACIENTE:", 0, 0)
+    pdf.set_font('Arial', '', 10); pdf.cell(100, 6, normalizar_texto_pdf(datos['paciente_nombre']), 0, 0)
+    pdf.set_font('Arial', 'B', 10); pdf.cell(15, 6, "FECHA:", 0, 0)
+    pdf.set_font('Arial', '', 10); pdf.cell(30, 6, datos['fecha'], 0, 1)
     
-    pdf.set_font('Arial', 'B', 10); pdf.cell(15, 6, "Edad:", 0, 0)
-    # [V42.0] FIX ENCODING
-    edad_str = f"{datos['edad']} anos".encode('latin-1', 'replace').decode('latin-1') 
-    # Truco: Si FPDF sigue fallando, usamos 'anos'. Si soporta latin-1, usamos 'años'.
-    # Para seguridad maxima usamos 'anos' en este fix rapido, o encode.
-    # Intentaremos pasar string seguro.
-    pdf.set_font('Arial', '', 10); pdf.cell(30, 6, f"{datos['edad']} anos", 0, 1) 
+    pdf.set_font('Arial', 'B', 10); pdf.cell(15, 6, "EDAD:", 0, 0)
+    pdf.set_font('Arial', '', 10); pdf.cell(30, 6, f"{datos['edad']} ANOS", 0, 1) # ANOS SIN Ñ
     pdf.ln(10)
     
-    # Cuerpo Receta
+    # Prescripción
     pdf.set_fill_color(240, 240, 240); pdf.set_font('Arial', 'B', 11)
     pdf.cell(0, 10, "PRESCRIPCION", 1, 1, 'L', 1)
     pdf.set_font('Courier', '', 11); pdf.set_text_color(0, 0, 50)
     pdf.multi_cell(0, 8, datos['medicamentos'])
     
-    # Firma
-    pdf.ln(40)
-    pdf.set_draw_color(0, 0, 0); pdf.line(70, pdf.get_y(), 140, pdf.get_y())
-    pdf.set_font('Arial', 'B', 9); pdf.set_text_color(0, 0, 0)
-    pdf.cell(0, 5, "FIRMA DEL MEDICO", 0, 1, 'C')
+    pdf.ln(40); pdf.set_draw_color(0,0,0); pdf.line(70, pdf.get_y(), 140, pdf.get_y())
+    pdf.set_font('Arial', 'B', 9); pdf.set_text_color(0,0,0); pdf.cell(0, 5, "FIRMA DEL MEDICO", 0, 1, 'C')
 
-    # --- PÁGINA 2: INDICACIONES Y LEGAL ---
-    pdf.add_page()
-    pdf.set_font('Arial', 'B', 14); pdf.set_text_color(200, 0, 0)
-    pdf.cell(0, 10, "INDICACIONES Y CUIDADOS POST-TRATAMIENTO", 0, 1, 'C')
-    pdf.ln(5)
+    # PÁGINA 2
+    pdf.add_page(); pdf.set_font('Arial', 'B', 14); pdf.set_text_color(200, 0, 0)
+    pdf.cell(0, 10, "INDICACIONES Y CUIDADOS POST-TRATAMIENTO", 0, 1, 'C'); pdf.ln(5)
     
-    # Texto Indicaciones
     pdf.set_font('Arial', '', 10); pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 6, datos['indicaciones'])
     pdf.ln(10)
     
-    # SEÑALES DE ALERTA (SIN EMOJIS)
     pdf.set_fill_color(255, 235, 238); pdf.set_text_color(200, 0, 0); pdf.set_font('Arial', 'B', 11)
     pdf.cell(0, 8, "SENALES DE ALERTA", 1, 1, 'L', 1)
     pdf.set_font('Arial', '', 10); pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 6, "Contacte al consultorio si presenta: Sangrado que no cede tras 40 min de presion, Fiebre >38 C, Dificultad para respirar/tragar, o Reaccion alergica (ronchas/hinchazon).")
     pdf.ln(5)
     
-    # DESLINDE LEGAL
     pdf.set_fill_color(240, 240, 240); pdf.set_text_color(0, 0, 0); pdf.set_font('Arial', 'B', 9)
     pdf.cell(0, 8, "DESLINDE DE RESPONSABILIDAD Y SEGUIMIENTO", 1, 1, 'L', 1)
     pdf.set_font('Arial', 'I', 8)
     pdf.multi_cell(0, 5, "El exito del tratamiento depende del seguimiento profesional. El consultorio NO se hace responsable por complicaciones, infecciones o fracasos derivados de negligencia en estos cuidados, automedicacion o la INASISTENCIA a las citas de control programadas. La falta de seguimiento exime al clinico de garantias.")
-
+    
     val = pdf.output(dest='S'); return val.encode('latin-1', 'replace') if isinstance(val, str) else bytes(val)
 
 def crear_recibo_pago(datos_recibo):
     pdf = PDFGenerator(); pdf.add_page()
     pdf.set_font('Arial', 'B', 16); pdf.cell(0, 10, 'RECIBO DE PAGO', 0, 1, 'C'); pdf.ln(5)
+    
     pdf.set_fill_color(240, 240, 240); pdf.set_font('Arial', 'B', 10)
     pdf.cell(130, 8, "DATOS DEL PACIENTE", 1, 0, 'L', 1); pdf.cell(60, 8, "DETALLES DEL RECIBO", 1, 1, 'L', 1)
     pdf.set_font('Arial', '', 10)
-    pdf.cell(130, 8, f"Paciente: {formato_nombre_legal(datos_recibo['paciente'])}", 1, 0); pdf.cell(60, 8, f"Folio: {datos_recibo['folio']}", 1, 1)
+    pdf.cell(130, 8, f"Paciente: {normalizar_texto_pdf(datos_recibo['paciente'])}", 1, 0); pdf.cell(60, 8, f"Folio: {datos_recibo['folio']}", 1, 1)
     pdf.cell(130, 8, f"RFC: {datos_recibo.get('rfc', 'XAXX010101000')}", 1, 0); pdf.cell(60, 8, f"Fecha: {datos_recibo['fecha']}", 1, 1)
     pdf.ln(5)
+
     pdf.set_font('Arial', 'B', 8); pdf.set_fill_color(220, 230, 240)
-    pdf.cell(8, 8, "CVO", 1, 0, 'C', 1); pdf.cell(65, 8, "TRATAMIENTO", 1, 0, 'C', 1); pdf.cell(35, 8, "DOCTOR", 1, 0, 'C', 1); pdf.cell(20, 8, "COSTO", 1, 0, 'C', 1); pdf.cell(20, 8, "ABONO", 1, 0, 'C', 1); pdf.cell(20, 8, "SALDO", 1, 0, 'C', 1); pdf.cell(22, 8, "METODO", 1, 1, 'C', 1)
-    pdf.set_font('Arial', '', 7) 
+    pdf.cell(8, 8, "CVO", 1, 0, 'C', 1); pdf.cell(65, 8, "TRATAMIENTO", 1, 0, 'C', 1); pdf.cell(35, 8, "DOCTOR", 1, 0, 'C', 1)
+    pdf.cell(20, 8, "COSTO", 1, 0, 'C', 1); pdf.cell(20, 8, "ABONO", 1, 0, 'C', 1); pdf.cell(20, 8, "SALDO", 1, 0, 'C', 1); pdf.cell(22, 8, "METODO", 1, 1, 'C', 1)
+    pdf.set_font('Arial', '', 7)
     idx = 1
     if datos_recibo['items_hoy']:
         for item in datos_recibo['items_hoy']:
-            pdf.cell(8, 6, str(idx), 1, 0, 'C'); pdf.cell(65, 6, item['tratamiento'][:35], 1, 0); pdf.cell(35, 6, item.get('doctor_atendio', '')[:20], 1, 0); pdf.cell(20, 6, f"${item['precio_final']:,.2f}", 1, 0, 'R'); pdf.cell(20, 6, f"${item['monto_pagado']:,.2f}", 1, 0, 'R'); pdf.cell(20, 6, f"${item['saldo_pendiente']:,.2f}", 1, 0, 'R'); pdf.cell(22, 6, item['metodo_pago'][:15], 1, 1, 'C'); idx += 1
-    else: pdf.cell(190, 6, "Sin movimientos registrados hoy", 1, 1, 'C')
+            pdf.cell(8, 6, str(idx), 1, 0, 'C')
+            pdf.cell(65, 6, normalizar_texto_pdf(item['tratamiento'][:35]), 1, 0)
+            pdf.cell(35, 6, normalizar_texto_pdf(item.get('doctor_atendio', '')[:20]), 1, 0)
+            pdf.cell(20, 6, f"${item['precio_final']:,.2f}", 1, 0, 'R')
+            pdf.cell(20, 6, f"${item['monto_pagado']:,.2f}", 1, 0, 'R')
+            pdf.cell(20, 6, f"${item['saldo_pendiente']:,.2f}", 1, 0, 'R')
+            pdf.cell(22, 6, item['metodo_pago'][:15], 1, 1, 'C')
+            idx += 1
+    else: pdf.cell(190, 6, "SIN MOVIMIENTOS REGISTRADOS HOY", 1, 1, 'C')
     pdf.ln(5)
+    
     if datos_recibo['items_deuda']:
-        pdf.set_font('Arial', 'B', 10); pdf.set_fill_color(255, 235, 238)
-        pdf.cell(190, 8, "SALDOS ANTERIORES PENDIENTES", 1, 1, 'L', 1)
+        pdf.set_font('Arial', 'B', 10); pdf.set_fill_color(255, 235, 238); pdf.cell(190, 8, "SALDOS ANTERIORES PENDIENTES", 1, 1, 'L', 1)
         pdf.set_font('Arial', 'B', 8); pdf.cell(25, 6, "FECHA", 1, 0); pdf.cell(125, 6, "TRATAMIENTO", 1, 0); pdf.cell(40, 6, "SALDO PENDIENTE", 1, 1, 'R'); pdf.set_font('Arial', '', 8)
-        for d in datos_recibo['items_deuda']: pdf.cell(25, 6, d['fecha'], 1, 0); pdf.cell(125, 6, d['tratamiento'][:80], 1, 0); pdf.cell(40, 6, f"${d['saldo_pendiente']:,.2f}", 1, 1, 'R')
+        for d in datos_recibo['items_deuda']:
+            pdf.cell(25, 6, d['fecha'], 1, 0)
+            pdf.cell(125, 6, normalizar_texto_pdf(d['tratamiento'][:80]), 1, 0)
+            pdf.cell(40, 6, f"${d['saldo_pendiente']:,.2f}", 1, 1, 'R')
         pdf.ln(5)
-    pdf.set_font('Arial', 'B', 10); pdf.cell(110, 8, "", 0, 0); pdf.set_fill_color(240, 240, 240); pdf.cell(40, 8, "TOTAL TRATAMIENTO:", 1, 0, 'R', 1); pdf.cell(40, 8, f"${datos_recibo['total_tratamiento_hoy']:,.2f}", 1, 1, 'R'); pdf.cell(110, 8, "", 0, 0); pdf.cell(40, 8, "TOTAL PAGADO:", 1, 0, 'R', 1); pdf.cell(40, 8, f"${datos_recibo['total_pagado_hoy']:,.2f}", 1, 1, 'R')
-    if datos_recibo['saldo_total_global'] > 0: pdf.cell(110, 8, "", 0, 0); pdf.set_text_color(200, 0, 0); pdf.cell(40, 8, "PENDIENTE DE PAGO:", 1, 0, 'R', 1); pdf.cell(40, 8, f"${datos_recibo['saldo_total_global']:,.2f}", 1, 1, 'R'); pdf.set_text_color(0, 0, 0)
-    pdf.ln(10); pdf.set_y(-30); pdf.set_font('Arial', 'I', 7); pdf.multi_cell(0, 4, "Este documento es un comprobante interno. Si requiere factura fiscal (CFDI), favor de solicitarla dentro del mes en curso.", 0, 'C')
+
+    pdf.set_font('Arial', 'B', 10); pdf.cell(110, 8, "", 0, 0); pdf.set_fill_color(240, 240, 240)
+    pdf.cell(40, 8, "TOTAL TRATAMIENTO:", 1, 0, 'R', 1); pdf.cell(40, 8, f"${datos_recibo['total_tratamiento_hoy']:,.2f}", 1, 1, 'R')
+    pdf.cell(110, 8, "", 0, 0); pdf.cell(40, 8, "TOTAL PAGADO:", 1, 0, 'R', 1); pdf.cell(40, 8, f"${datos_recibo['total_pagado_hoy']:,.2f}", 1, 1, 'R')
+    if datos_recibo['saldo_total_global'] > 0:
+        pdf.cell(110, 8, "", 0, 0); pdf.set_text_color(200, 0, 0); pdf.cell(40, 8, "PENDIENTE DE PAGO:", 1, 0, 'R', 1); pdf.cell(40, 8, f"${datos_recibo['saldo_total_global']:,.2f}", 1, 1, 'R'); pdf.set_text_color(0, 0, 0)
+    
+    pdf.ln(10); pdf.set_y(-30); pdf.set_font('Arial', 'I', 7)
+    pdf.multi_cell(0, 4, "Este documento es un comprobante interno. Si requiere factura fiscal (CFDI), favor de solicitarla dentro del mes en curso.", 0, 'C')
     val = pdf.output(dest='S'); return val.encode('latin-1', 'replace') if isinstance(val, str) else bytes(val)
+
+def crear_pdf_consentimiento(paciente_full, nombre_doctor, cedula_doctor, tipo_doc, tratamientos_str, riesgos_str, firma_pac, firma_doc, testigos_data, nivel_riesgo, edad_paciente, tutor_info):
+    pdf = PDFGenerator(); pdf.add_page()
+    fecha_hoy = get_fecha_mx()
+    paciente_full = formato_nombre_legal(paciente_full)
+    nombre_doctor = formato_nombre_legal(nombre_doctor)
+    if "Aviso" in tipo_doc:
+        pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, "AVISO DE PRIVACIDAD INTEGRAL PARA PACIENTES", 0, 1, 'C'); pdf.ln(5)
+        texto = f"En cumplimiento estricto con lo dispuesto por la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (la 'Ley')...\n\nIDENTIDAD Y DOMICILIO DEL RESPONSABLE\nLa clínica dental denominada comercialmente ROYAL DENTAL (en adelante 'El Responsable'), con domicilio en {DIRECCION_CONSULTORIO}...\n\n{TXT_DATOS_SENSIBLES}\n\nFINALIDADES DEL TRATAMIENTO\nA) Prestación de servicios odontológicos. B) Creación y conservación del expediente clínico. C) Facturación y cobranza. D) Contacto para seguimiento.\nFinalidades Secundarias: Envío de promociones y encuestas de calidad.\n\nTRANSFERENCIA DE DATOS\nSus datos pueden ser compartidos con: Laboratorios dentales y gabinetes radiológicos...\n\nDERECHOS ARCO\nUsted tiene derecho a Acceder, Rectificar, Cancelar u Oponerse...\n\n{TXT_CONSENTIMIENTO_EXPRESO}"
+        pdf.chapter_body(texto)
+    else:
+        pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, "CARTA DE CONSENTIMIENTO INFORMADO", 0, 1, 'C'); pdf.ln(5)
+        cuerpo = f"LUGAR Y FECHA: Ciudad de México, a {fecha_hoy}\nNOMBRE DEL PACIENTE: {paciente_full}\nODONTÓLOGO TRATANTE: {nombre_doctor} (Céd. Prof. {cedula_doctor})\n\nDECLARACIÓN DEL PACIENTE:\nYo, el paciente arriba mencionado, declaro en pleno uso de mis facultades que he recibido una explicación clara sobre mi diagnóstico y el plan de tratamiento.\n\nPROCEDIMIENTO(S) A REALIZAR: {tratamientos_str}\n\nRIESGOS Y COMPLICACIONES ADVERTIDOS:\n{riesgos_str}\n\n{CLAUSULA_CIERRE}\n\nOBLIGACIÓN DE MEDIOS Y NO DE RESULTADOS: Entiendo que la Odontología no es una ciencia exacta...\n\nAUTORIZACIÓN: Autorizo la anestesia local y procedimientos necesarios, asumiendo los riesgos inherentes."
+        pdf.chapter_body(cuerpo)
+    pdf.ln(10); y_firmas = pdf.get_y(); pdf.set_font('Arial', 'B', 8)
+    if edad_paciente < 18:
+        pdf.text(20, y_firmas + 40, f"FIRMA DEL TUTOR: {tutor_info.get('nombre', '')} ({tutor_info.get('relacion', '')})"); pdf.text(20, y_firmas + 45, f"En representación de: {paciente_full}")
+    else: pdf.text(20, y_firmas + 40, "FIRMA DEL PACIENTE"); pdf.text(20, y_firmas + 45, paciente_full) 
+    if firma_pac:
+        f_path = procesar_firma_digital(firma_pac)
+        if f_path: pdf.image(f_path, x=20, y=y_firmas, w=45, h=30); os.remove(f_path)
+    else: pdf.line(20, y_firmas + 35, 70, y_firmas + 35)
+    if "Aviso" not in tipo_doc:
+        pdf.text(110, y_firmas + 40, f"FIRMA ODONTOLOGO TRATANTE")
+        if firma_doc:
+            f_path_d = procesar_firma_digital(firma_doc)
+            if f_path_d: pdf.image(f_path_d, x=110, y=y_firmas, w=45, h=30); os.remove(f_path_d)
+        else: pdf.line(110, y_firmas + 35, 160, y_firmas + 35)
+        if nivel_riesgo == "HIGH_RISK":
+            pdf.ln(50); y_testigos = pdf.get_y(); pdf.text(20, y_testigos + 40, f"TESTIGO 1: {formato_nombre_legal(testigos_data.get('n1',''))}")
+            if testigos_data.get('img_t1'): f_path_t1 = procesar_firma_digital(testigos_data['img_t1']); pdf.image(f_path_t1, x=20, y=y_testigos, w=45, h=30) if f_path_t1 else None; os.remove(f_path_t1) if f_path_t1 else None
+            else: pdf.line(20, y_testigos + 35, 70, y_testigos + 35)
+            pdf.text(110, y_testigos + 40, f"TESTIGO 2: {formato_nombre_legal(testigos_data.get('n2',''))}")
+            if testigos_data.get('img_t2'): f_path_t2 = procesar_firma_digital(testigos_data['img_t2']); pdf.image(f_path_t2, x=110, y=y_testigos, w=45, h=30) if f_path_t2 else None; os.remove(f_path_t2) if f_path_t2 else None
+            else: pdf.line(110, y_testigos + 35, 160, y_testigos + 35)
+    val = pdf.output(dest='S'); return val.encode('latin-1') if isinstance(val, str) else bytes(val)
+
+def crear_pdf_historia(p, historial):
+    pdf = PDFGenerator(); pdf.add_page(); nombre_p = formato_nombre_legal(f"{p['nombre']} {p['apellido_paterno']} {p.get('apellido_materno','')}"); edad, _ = calcular_edad_completa(p.get('fecha_nacimiento', ''))
+    pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, "HISTORIA CLÍNICA ODONTOLÓGICA (NOM-004-SSA3-2012)", 0, 1, 'C'); pdf.ln(5)
+    pdf.set_fill_color(230, 230, 230); pdf.set_font('Arial', 'B', 10); pdf.cell(0, 6, "I. FICHA DE IDENTIFICACIÓN", 1, 1, 'L', True); pdf.set_font('Arial', '', 9)
+    info = f"""Nombre: {nombre_p}\nEdad: {edad} | Sexo: {p.get('sexo','N/A')} | Nacimiento: {p.get('fecha_nacimiento','N/A')}\nOcupación: {formato_titulo(p.get('ocupacion','N/A'))} | Estado Civil: {formato_titulo(p.get('estado_civil','N/A'))}\nDomicilio: {formato_titulo(p.get('domicilio','N/A'))}\nTel: {p['telefono']} | Email: {p.get('email','N/A')}\nContacto Emergencia: {formato_nombre_legal(p.get('contacto_emergencia','N/A'))} ({p.get('telefono_emergencia','S/N')})\nTutor: {formato_nombre_legal(p.get('tutor','N/A'))} ({p.get('parentesco_tutor','')})"""
+    pdf.multi_cell(0, 5, info, 1); pdf.ln(2)
+    pdf.set_font('Arial', 'B', 10); pdf.cell(0, 6, "II. ANTECEDENTES (ANAMNESIS)", 1, 1, 'L', True); pdf.set_font('Arial', '', 9)
+    ant = f"""HEREDO-FAMILIARES (AHF): {formato_oracion(p.get('ahf','Negados'))}\n\nPERSONALES PATOLÓGICOS (APP - Alergias/Enf): {formato_oracion(p.get('app','Negados'))}\n\nNO PATOLÓGICOS (APNP): {formato_oracion(p.get('apnp','Negados'))}"""
+    pdf.multi_cell(0, 5, ant, 1); pdf.ln(2)
+    pdf.set_font('Arial', 'B', 10); pdf.cell(0, 6, "III. MOTIVO DE CONSULTA Y DIAGNÓSTICO", 1, 1, 'L', True); pdf.set_font('Arial', '', 9)
+    diag = f"""Motivo: {formato_oracion(p.get('motivo_consulta','N/A'))}\n\nExploración Física: {formato_oracion(p.get('exploracion_fisica','N/A'))}\n\nDiagnóstico: {formato_oracion(p.get('diagnostico','N/A'))}"""
+    pdf.multi_cell(0, 5, diag, 1); pdf.ln(5)
+    pdf.set_font('Arial', 'B', 10); pdf.cell(0, 6, "IV. NOTAS DE EVOLUCIÓN", 0, 1, 'L')
+    if not historial.empty:
+        pdf.set_font('Arial', 'B', 8); x_start = pdf.get_x(); pdf.cell(25, 6, "FECHA", 1, 0, 'C'); pdf.cell(60, 6, "TRATAMIENTO", 1, 0, 'C'); pdf.cell(105, 6, "NOTAS / EVOLUCIÓN", 1, 1, 'C'); pdf.set_font('Arial', '', 8)
+        for _, row in historial.iterrows():
+            txt_fecha = str(row['fecha']); txt_trat = str(row['tratamiento'])[:45]; txt_nota = str(row['notas']) if row['notas'] else ""; txt_nota = formato_oracion(txt_nota) 
+            x_curr = pdf.get_x(); y_curr = pdf.get_y(); pdf.set_xy(x_curr + 85, y_curr); pdf.multi_cell(105, 5, txt_nota, 0, 'L'); y_end = pdf.get_y(); h_row = y_end - y_curr
+            if h_row < 6: h_row = 6
+            if y_curr + h_row > 270: 
+                pdf.add_page(); y_curr = pdf.get_y(); pdf.set_font('Arial', 'B', 8); pdf.cell(25, 6, "FECHA", 1, 0, 'C'); pdf.cell(60, 6, "TRATAMIENTO", 1, 0, 'C'); pdf.cell(105, 6, "NOTAS / EVOLUCIÓN", 1, 1, 'C'); pdf.set_font('Arial', '', 8); y_curr = pdf.get_y()
+            pdf.set_xy(x_curr, y_curr); pdf.rect(x_curr, y_curr, 25, h_row); pdf.set_xy(x_curr, y_curr); pdf.multi_cell(25, 5, txt_fecha, 0, 'C') 
+            pdf.rect(x_curr + 25, y_curr, 60, h_row); pdf.set_xy(x_curr + 25, y_curr); pdf.multi_cell(60, 5, txt_trat, 0, 'L') 
+            pdf.rect(x_curr + 85, y_curr, 105, h_row); pdf.set_xy(x_curr + 85, y_curr); pdf.multi_cell(105, 5, txt_nota, 0, 'L') 
+            pdf.set_xy(x_curr, y_curr + h_row)
+    val = pdf.output(dest='S'); return val.encode('latin-1') if isinstance(val, str) else bytes(val)
 
 # ==========================================
 # 6. APP PRINCIPAL
@@ -489,15 +517,6 @@ def vista_consultorio():
     
     menu = st.sidebar.radio("Menú", ["1. Agenda & Citas", "2. Gestión Pacientes", "3. Planes de Tratamiento", "4. Farmacia & Recetas", "5. Documentos & Firmas", "6. Control Asistencia"])
     
-    with st.sidebar.expander("🛠️ Mantenimiento"):
-        if st.button("🗑️ RESETEAR BASE DE DATOS (CUIDADO)", type="primary"):
-            try:
-                conn_temp = get_db_connection(); c_temp = conn_temp.cursor()
-                c_temp.execute("DELETE FROM pacientes"); c_temp.execute("DELETE FROM citas"); c_temp.execute("DELETE FROM asistencia"); c_temp.execute("DELETE FROM odontograma")
-                conn_temp.commit(); conn_temp.close(); st.cache_data.clear()
-                if 'perfil' in st.session_state: del st.session_state['perfil']
-                st.success("✅ Sistema y memoria limpiados."); time.sleep(1); st.rerun()
-            except Exception as e: st.error(f"Error crítico: {e}")
     if st.sidebar.button("Cerrar Sesión"): st.session_state.perfil = None; st.rerun()
 
     # --- 1. AGENDA ---
@@ -794,7 +813,8 @@ def vista_consultorio():
                     with st.form("cobro", clear_on_submit=True):
                         c1, c2, c3 = st.columns(3); precio = c1.number_input("Precio", value=precio_sug, step=50.0); abono = c2.number_input("Abono", step=50.0); saldo = precio - abono; c3.metric("Saldo", f"${saldo:,.2f}")
                         c4, c5, c6 = st.columns([1.5, 1, 1]); metodo = c4.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia", "Garantía", "Pendiente de Pago"]); num_sessions = c5.number_input("Sesiones", min_value=1, value=1); agendar = c6.checkbox("¿Agendar Cita?")
-                        if agendar: c7, c8 = st.columns(2); f_cita = c7.date_input("Fecha Cita", datetime.now(TZ_MX)); h_cita = c8.selectbox("Hora Cita", generar_slots_tiempo())
+                        if agendar: 
+                            c7, c8 = st.columns(2); f_cita = c7.date_input("Fecha Cita", datetime.now(TZ_MX)); h_cita = c8.selectbox("Hora Cita", generar_slots_tiempo())
                         else: f_cita = datetime.now(TZ_MX); h_cita = "00:00"
                         notas = st.text_area("Notas Evolución", height=70)
                         if st.form_submit_button("Registrar Cobro/Tratamiento"):
