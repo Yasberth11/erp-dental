@@ -247,7 +247,7 @@ def format_date_latino(date_obj): return date_obj.strftime("%d/%m/%Y")
 def normalizar_texto_pdf(texto):
     if not texto: return ""
     texto = str(texto).upper().strip()
-    replacements = (("Á", "A"), ("É", "E"), ("Í", "I"), ("Ó", "O"), ("Ú", "U"), ("Ñ", "N"), ("Ü", "U"))
+    replacements = (("Á", "A"), ("É", "E"), ("Í", "I"), ("Ó", "O"), ("Ú", "U"), ("Ñ", "Ñ"), ("Ü", "Ü"))
     for a, b in replacements:
         texto = texto.replace(a, b)
     return texto
