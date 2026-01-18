@@ -30,7 +30,7 @@ CARPETA_PACIENTES = "pacientes_files"
 if not os.path.exists(CARPETA_PACIENTES):
     os.makedirs(CARPETA_PACIENTES)
 
-# [V46.0] ESTILO CSS ROYAL (RESTAURADO DE V41)
+# [V1.0] ESTILO CSS ROYAL
 st.markdown("""
     <style>
     .stApp { background-color: #F4F6F6; }
@@ -107,7 +107,7 @@ LISTA_DOCTORES = list(DOCS_INFO.keys())
 LISTA_OCUPACIONES = ["Estudiante", "Empleado/a", "Empresario/a", "Hogar", "Comerciante", "Docente", "Sector Salud", "Jubilado/a", "Desempleado/a", "Otro"]
 LISTA_PARENTESCOS = ["Madre", "Padre", "Abuelo(a)", "Tío(a)", "Hermano(a) Mayor", "Tutor Legal Designado", "Otro"]
 
-# BASES DE DATOS DE TEXTOS (COMPLETAS)
+# BASES DE DATOS DE TEXTOS (COMPLETAS Y ACTUALIZADAS V1.0)
 CLAUSULA_CIERRE = "Adicionalmente, entiendo que pueden presentarse eventos imprevisibles en cualquier acto médico, tales como: reacciones alérgicas a los anestésicos o materiales (incluso si no tengo antecedentes conocidos), síncope (desmayo), trismus (dificultad para abrir la boca), hematomas, o infecciones secundarias. Acepto que el éxito del tratamiento depende también de mi biología y de seguir estrictamente las indicaciones post-operatorias."
 TXT_DATOS_SENSIBLES = "DATOS PERSONALES SENSIBLES: Además de los datos de identificación, y para cumplir con la Normatividad Sanitaria (NOM-004-SSA3-2012 y NOM-013-SSA2-2015), recabamos: Estado de salud presente, pasado y futuro; Antecedentes Heredo-Familiares y Patológicos; Historial Farmacológico y Alergias; Hábitos de vida (tabaquismo/alcoholismo); e Imágenes diagnósticas/Biometría."
 TXT_CONSENTIMIENTO_EXPRESO = "CONSENTIMIENTO EXPRESO: De conformidad con el artículo 9 de la LFPDPPP, otorgo mi consentimiento expreso para el tratamiento de mis datos sensibles. Reconozco que la firma digital en este documento tiene plena validez legal, equiparándose a mi firma autógrafa."
@@ -121,27 +121,41 @@ MEDICAMENTOS_DB = {
     "Pediátrico (General)": "Paracetamol Suspensión.\nAdministrar dosis según peso del paciente cada 6-8 horas en caso de fiebre o dolor."
 }
 
+# [V1.0] INDICACIONES ROBUSTAS (MEJORA LEGAL)
 INDICACIONES_DB = {
-    "Extracción / Cirugía": """1. CONTROL DE SANGRADO: Muerda la gasa firmemente por 30-40 minutos. Si persiste sangrado activo, coloque una nueva.
-2. PROHIBICIONES (24h): NO escupir, NO usar popotes (succión), NO enjuagarse, NO fumar ni beber alcohol (Riesgo grave de infección).
-3. ALIMENTACIÓN: Dieta blanda y fría por 48 horas (Nieves sin semillas, gelatinas). Cero grasas, irritantes o semillas pequeñas.
-4. HIGIENE: No cepillar la zona hoy. Mañana inicie higiene suave. Enjuagues pasivos con agua y sal.
-5. TERAPIA TÉRMICA: Compresas frías hoy (15min puesto/15min descanso). Calor húmedo después de 48 horas.""",
+    "Extracción / Cirugía": """CUIDADOS POST-QUIRÚRGICOS Y RECOMENDACIONES:
 
-    "Blanqueamiento": """1. DIETA BLANCA (48h): Evite alimentos con colorantes (Café, vino, refresco de cola, salsas oscuras, frutos rojos).
-2. SENSIBILIDAD: Evite bebidas muy frías/calientes y cítricos por 3 días. Use analgésico si hay molestia.
-3. HÁBITOS: No fumar (pigmentación inmediata).
-4. MANTENIMIENTO: El resultado no es permanente, depende de sus hábitos.""",
+1. CONTROL DE SANGRADO (Hemostasia): Muerda la gasa colocada firmemente y de manera constante durante 30 a 40 minutos. Si al retirarla persiste un sangrado activo, coloque una nueva gasa estéril y repita la presión.
+2. PROHIBICIONES CRÍTICAS (Primeras 24 horas): Para evitar el desalojo del coágulo sanguíneo:
+   - NO ESCUPIR. Si tiene saliva o sangre, tráguela o limpie suavemente.
+   - NO USAR POPOTES (Pajillas). La succión puede desprender el coágulo.
+   - NO ENJUAGARSE la boca vigorosamente el día de hoy.
+   - NO FUMAR ni consumir alcohol por al menos 7 días (El tabaco causa infecciones graves).
+3. ALIMENTACIÓN: Dieta blanda y fría/tibia durante las primeras 48 horas (Nieves, gelatinas, yogur). Evite alimentos con semillas pequeñas, grasas, picantes o irritantes.
+4. HIGIENE: Hoy evite cepillar la zona operada. A partir de mañana, realice higiene oral estricta pero suave.
+5. REPOSO: Mantenga la cabeza elevada al dormir. Evite actividad física o esfuerzos por 72 horas.
+6. TERAPIA TÉRMICA: Compresas frías hoy (15 min puesto/15 min descanso). Calor húmedo después de 48 horas si persiste inflamación.""",
 
-    "Endodoncia": """1. CUIDADO INMEDIATO: No comer hasta pasar la anestesia.
-2. RIESGO DE FRACTURA: Su diente está debilitado. NO mastique cosas duras con ese lado hasta tener la restauración final (corona). Si el diente se fractura, podría requerir extracción.
-3. SEGUIMIENTO: Es OBLIGATORIO acudir a la cita de rehabilitación definitiva.""",
+    "Blanqueamiento": """GUÍA DE MANTENIMIENTO BLANQUEAMIENTO DENTAL:
 
-    "General / Limpieza": """1. Siga su técnica de cepillado habitual.
-2. Utilice hilo dental diariamente.
-3. Acuda a sus revisiones semestrales."""
+1. DIETA BLANCA (Estricta por 48 horas): Evite alimentos/bebidas con pigmentos fuertes (Vino tinto, café, té, refrescos de cola, salsas oscuras, frutos rojos).
+2. SENSIBILIDAD: Es normal experimentar ligera sensibilidad. Evite bebidas extremadamente frías o calientes y alimentos ácidos (limón) durante 3 días. Tome el analgésico recomendado si es necesario.
+3. HÁBITOS: Evite fumar, el humo pigmenta agresivamente los dientes recién tratados.
+4. MANTENIMIENTO: El resultado no es permanente. Se recomiendan retoques periódicos y limpiezas semestrales.""",
+
+    "Endodoncia": """CUIDADOS POSTERIORES A ENDODONCIA:
+
+1. CUIDADOS INMEDIATOS: No coma alimentos sólidos hasta que pase el efecto de la anestesia para evitar morderse.
+2. RIESGO DE FRACTURA (IMPORTANTE): Su diente está estructuralmente debilitado. EVITE MASTICAR ALIMENTOS DUROS O CHICLOSOS con ese lado hasta que se coloque la restauración final (corona/incrustación). Una fractura podría implicar la extracción del diente.
+3. HIGIENE: Cepillado normal y uso de hilo dental (con cuidado en la zona tratada).
+4. RESTAURACIÓN DEFINITIVA: Es OBLIGATORIO acudir a su cita de rehabilitación lo antes posible para sellar y proteger el diente.""",
+
+    "General / Limpieza": """1. Siga su técnica de cepillado habitual (3 veces al día).
+2. Utilice hilo dental diariamente antes de dormir.
+3. Acuda a sus revisiones semestrales para prevención."""
 }
 
+# [V1.0] RIESGOS ACTUALIZADOS (TEXTO EXACTO DE DOCUMENTO CIRUGIA BUCAL)
 RIESGOS_DB = {
     "Profilaxis (Limpieza Ultrasónica)": "Sensibilidad dental transitoria (frio/calor); sangrado leve de encías debido a la inflamación previa; desalojo de restauraciones antiguas que estuvieran desajustadas; molestia en cuellos dentales expuestos.",
     "Aplicación de Flúor (Niños)": "Náuseas leves o malestar estomacal en caso de ingestión accidental; sabor desagradable momentáneo.",
@@ -150,9 +164,12 @@ RIESGOS_DB = {
     "Resina Compuesta (2 o más caras)": "Sensibilidad postoperatoria (dolor al morder o con el frío) que puede durar días o semanas; riesgo de pulpitis (inflamación del nervio) que requiera endodoncia si la caries era profunda; desajuste oclusal; fractura de la restauración o de la pared dental remanente.",
     "Reconstrucción de Muñón": "Riesgo de perforación del piso de la cámara pulpar; fractura de la estructura dental remanente debido a la debilidad del diente; pronóstico reservado sujeto a la colocación de la corona definitiva.",
     "Curación Temporal (Cavit)": "Desgaste o caída del material provisional si no se acude a la cita definitiva; filtración bacteriana y dolor si se deja más tiempo del indicado; sabor medicamentoso.",
-    "Extracción Simple": "Hemorragia o sangrado postoperatorio; dolor e inflamación (edema); infección del alveolo (alveolitis seca); hematomas faciales; daño accidental a dientes vecinos o restauraciones adyacentes; fractura de raíces que requiera odontosección.",
-    "Cirugía de Tercer Molar (Muela del Juicio)": "Parestesia (adormecimiento temporal o permanente de labio, lengua o mentón por cercanía con el nervio dentario); comunicación oroantral (en superiores); trismus severo; infección; inflamación extendida a cuello; equimosis (moretones).",
-    "Drenaje de Absceso": "Dolor durante la incisión; necesidad de mantener un drenaje (penrose); cicatriz en mucosa; posible reincidencia de la infección si no se trata el diente causal (extracción o endodoncia) inmediatamente.",
+    
+    # [V1.0] RIESGOS ROBUSTOS PARA CIRUGÍA (BASE WORD)
+    "Extracción Simple": "Comprendo que no está exento de complicaciones frecuentes como: Riesgo de la técnica de anestesia; Posible inflamación y dolor del área; Dificultad para abrir la boca y masticar; Riesgo de hemorragia y hematomas; Infección de las heridas; Posible pérdida de sensibilidad temporal; Riesgo de fracturas óseas o comunicación buco sinusal.",
+    "Cirugía de Tercer Molar (Muela del Juicio)": "Riesgos inherentes: Riesgo de la técnica de anestesia; Inflamación y dolor postoperatorio; Trismus (dificultad para abrir la boca); Riesgo de hemorragia y hematomas; Infección (alveolitis); Parestesia (pérdida de sensibilidad temporal o permanente); Riesgo de fracturas óseas o comunicación buco sinusal.",
+    "Drenaje de Absceso": "Dolor durante la incisión; necesidad de mantener un drenaje (penrose); cicatriz en mucosa; posible reincidencia de la infección si no se trata el diente causal inmediatamente.",
+    
     "Endodoncia Anterior (1 conducto)": "Fractura de instrumentos (limas) dentro de los conductos debido a anatomía compleja; perforación radicular; sobre-obturación o falta de sellado apical; dolor agudo post-tratamiento (flare-up); oscurecimiento del diente con el tiempo; fractura vertical de la raíz; posible fracaso del tratamiento que conlleve a la extracción.",
     "Endodoncia Premolar (2 conductos)": "Fractura de instrumentos (limas) dentro de los conductos debido a anatomía compleja; perforación radicular; sobre-obturación o falta de sellado apical; dolor agudo post-tratamiento (flare-up); oscurecimiento del diente con el tiempo; fractura vertical de la raíz; posible fracaso del tratamiento que conlleve a la extracción.",
     "Endodoncia Molar (3+ conductos)": "Fractura de instrumentos (limas) dentro de los conductos debido a anatomía compleja; perforación radicular; sobre-obturación o falta de sellado apical; dolor agudo post-tratamiento (flare-up); oscurecimiento del diente con el tiempo; fractura vertical de la raíz; posible fracaso del tratamiento que conlleve a la extracción.",
@@ -185,7 +202,7 @@ def get_db_connection():
 def migrar_tablas():
     conn = get_db_connection()
     c = conn.cursor()
-    # [V41.0] MIGRACIÓN DE TABLA CITAS (NUEVO STATUS) Y ODONTOGRAMA
+    # [V1.0] MIGRACIÓN DE TABLA CITAS (NUEVO STATUS) Y ODONTOGRAMA
     try: c.execute(f"ALTER TABLE citas ADD COLUMN estatus_asistencia TEXT")
     except: pass
     
@@ -338,7 +355,7 @@ def calcular_rfc_10(nombre, paterno, materno, nacimiento):
         return rfc_base
     except: return ""
 
-# [V41.0] GESTOR DE ODONTOGRAMA
+# [V1.0] GESTOR DE ODONTOGRAMA
 def actualizar_diente(id_paciente, diente):
     conn = get_db_connection()
     c = conn.cursor()
@@ -399,7 +416,7 @@ class PDFGenerator(FPDF):
             try: self.image(LOGO_FILE, 10, 8, 50) # Logo Clínica Grande
             except: pass
         
-        # [V41.0] LOGO UNAM
+        # [V1.0] LOGO UNAM
         if os.path.exists(LOGO_UNAM):
             try: self.image(LOGO_UNAM, 170, 8, 25) # Logo UNAM
             except: pass
@@ -423,7 +440,7 @@ def procesar_firma_digital(firma_img_data):
         return temp_filename
     except: return None
 
-# [V42.0] PDF RECETA FIX (SIN EMOJIS)
+# [V1.0] PDF RECETA FIX (SIN EMOJIS)
 def crear_pdf_receta(datos):
     pdf = PDFGenerator()
     
@@ -450,7 +467,7 @@ def crear_pdf_receta(datos):
     pdf.cell(30, 6, datos['fecha'], 0, 1)
     
     pdf.set_font('Arial', 'B', 10); pdf.cell(15, 6, "EDAD:", 0, 0)
-    # [V46.0] FIX AÑOS (CON Ñ FORZADA SI EL SISTEMA LO PERMITE, SINO NORMALIZADO)
+    # [V1.0] FIX AÑOS (CON Ñ FORZADA SI EL SISTEMA LO PERMITE, SINO NORMALIZADO)
     # Usamos normalización segura para evitar crash
     edad_txt = f"{datos['edad']} ANOS"
     pdf.set_font('Arial', '', 10); pdf.cell(30, 6, edad_txt, 0, 1) 
@@ -505,7 +522,7 @@ def crear_recibo_pago(datos_recibo):
     pdf.cell(130, 8, f"RFC: {datos_recibo.get('rfc', 'XAXX010101000')}", 1, 0); pdf.cell(60, 8, f"Fecha: {datos_recibo['fecha']}", 1, 1)
     pdf.ln(5)
 
-    # [V46.0] ALINEACION DE TOTALES REPARADA (TABLA COMPACTA)
+    # [V1.0] ALINEACION DE TOTALES REPARADA (TABLA COMPACTA)
     pdf.set_font('Arial', 'B', 8); pdf.set_fill_color(220, 230, 240)
     pdf.cell(8, 8, "CVO", 1, 0, 'C', 1)
     pdf.cell(65, 8, "TRATAMIENTO", 1, 0, 'C', 1)
@@ -543,7 +560,7 @@ def crear_recibo_pago(datos_recibo):
             pdf.cell(40, 6, f"${d['saldo_pendiente']:,.2f}", 1, 1, 'R')
         pdf.ln(5)
 
-    # [V46.0] TOTALES ALINEADOS A LA DERECHA (Fixed Widths)
+    # [V1.0] TOTALES ALINEADOS A LA DERECHA (Fixed Widths)
     pdf.set_font('Arial', 'B', 10)
     pdf.cell(110, 8, "", 0, 0)
     pdf.set_fill_color(240, 240, 240)
@@ -732,8 +749,13 @@ def crear_pdf_historia(p, historial):
             pdf.multi_cell(105, 5, txt_nota, 0, 'L') 
             
             pdf.set_xy(x_curr, y_curr + h_row)
+    
+    # [V1.0] DECLARACIÓN JURADA AL PIE (BLINDAJE LEGAL)
+    pdf.ln(10)
+    pdf.set_font('Arial', 'I', 8)
+    pdf.multi_cell(0, 5, f"Yo, {nombre_p}, hago constar que la información proporcionada es verídica y autorizo que se me realicen los procedimientos correspondientes para mi tratamiento o plan de trabajo aunque conozco los riesgos que los procedimientos conlleven.")
             
-    val = pdf.output(dest='S'); return val.encode('latin-1') if isinstance(val, str) else bytes(val)
+    val = pdf.output(dest='S'); return val.encode('latin-1', 'replace') if isinstance(val, str) else bytes(val)
 
 # ==========================================
 # 5. SISTEMA DE LOGIN
@@ -781,7 +803,8 @@ def vista_consultorio():
             try:
                 conn_temp = get_db_connection(); c_temp = conn_temp.cursor()
                 c_temp.execute("DELETE FROM pacientes"); c_temp.execute("DELETE FROM citas"); c_temp.execute("DELETE FROM asistencia"); c_temp.execute("DELETE FROM odontograma")
-                conn_temp.commit(); conn_temp.close(); st.cache_data.clear()
+                conn_temp.commit(); conn_temp.close()
+                st.cache_data.clear() # [V1.0] FIX ZOMBIE DATA
                 if 'perfil' in st.session_state: del st.session_state['perfil']
                 st.success("✅ Sistema y memoria limpiados."); time.sleep(1); st.rerun()
             except Exception as e: st.error(f"Error crítico: {e}")
@@ -909,7 +932,6 @@ def vista_consultorio():
     elif menu == "2. Gestión Pacientes":
         st.title("📂 Expediente Clínico"); tab_b, tab_n, tab_e, tab_odo, tab_img = st.tabs(["🔍 BUSCAR", "➕ ALTA", "✏️ EDITAR", "🦷 ODONTOGRAMA", "📸 IMÁGENES"])
         with tab_b:
-            # [V46.0] RESTAURACIÓN COMPLETA VISUAL ROYAL CARD
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
             if not pacientes_raw.empty:
                 lista_busqueda = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist(); seleccion = st.selectbox("Seleccionar:", ["..."] + lista_busqueda)
@@ -917,10 +939,8 @@ def vista_consultorio():
                     id_sel_str = seleccion.split(" - ")[0]; p_data = pacientes_raw[pacientes_raw['id_paciente'] == id_sel_str].iloc[0]; st.session_state.id_paciente_activo = id_sel_str; edad, tipo_pac = calcular_edad_completa(p_data.get('fecha_nacimiento', '')); antecedentes = str(p_data.get('app', '')).strip()
                     if antecedentes and len(antecedentes) > 2 and "NEGADO" not in antecedentes.upper(): st.markdown(f"""<div class='alerta-medica'><span>🚨</span><span>ATENCIÓN CLÍNICA: {antecedentes}</span></div>""", unsafe_allow_html=True)
                     
-                    # [V46.0] LAYOUT ASIMÉTRICO 1:2 (FOTO / DATOS)
                     c_card, c_hist = st.columns([1, 2])
                     with c_card:
-                        # [V46.0] ROYAL CARD HTML PURO
                         st.markdown(f"""
                         <div class="royal-card">
                             <h3 style="color:#002B5B; margin-top:0;">👤 {p_data['nombre']} {p_data['apellido_paterno']}</h3>
@@ -945,7 +965,6 @@ def vista_consultorio():
                             st.dataframe(df_notes, use_container_width=True, hide_index=False)
                         else: st.info("Sin notas registradas.")
 
-        # [V46.0] ODONTOGRAMA SIN EMOJIS
         with tab_odo:
             if 'id_paciente_activo' in st.session_state and st.session_state.id_paciente_activo:
                 p = pd.read_sql(f"SELECT * FROM pacientes WHERE id_paciente='{st.session_state.id_paciente_activo}'", conn).iloc[0]
@@ -973,7 +992,6 @@ def vista_consultorio():
                 st.caption("Clic para cambiar: ⚪Sano -> 🔴Caries -> 🔵Resina -> ⚫Ausente -> 🟡Corona")
             else: st.warning("Seleccione un paciente primero.")
 
-        # ... (Resto de tabs Alta/Editar/Imagenes V41 intactos) ...
         with tab_n:
             st.markdown("#### Formulario Alta (NOM-004)"); 
             with st.form("alta_paciente", clear_on_submit=True):
@@ -1028,7 +1046,6 @@ def vista_consultorio():
                     for f in os.listdir(path): st.image(os.path.join(path,f), caption=f, width=200)
 
     elif menu == "4. Farmacia & Recetas":
-        # ... (Mantener V44 que funciona) ...
         st.title("💊 Farmacia Clínica")
         pacientes = pd.read_sql("SELECT id_paciente, nombre, apellido_paterno FROM pacientes", conn)
         if not pacientes.empty:
@@ -1058,7 +1075,6 @@ def vista_consultorio():
             else: st.info("Seleccione un paciente para comenzar.")
 
     elif menu == "3. Planes de Tratamiento":
-        # ... (Mantener V44 que funciona) ...
         st.title("💰 Finanzas")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         if not pacientes.empty:
