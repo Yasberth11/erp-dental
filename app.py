@@ -185,6 +185,13 @@ def get_db_connection():
 def migrar_tablas():
     conn = get_db_connection()
     c = conn.cursor()
+    
+    # [NUEVO V48.0] COLUMNAS PARA OBSERVACIONES ADMINISTRATIVAS
+    try: c.execute("ALTER TABLE pacientes ADD COLUMN nota_administrativa TEXT")
+    except: pass
+    try: c.execute("ALTER TABLE citas ADD COLUMN observaciones TEXT")
+    except: pass
+
     # [V41.0] MIGRACIÓN DE TABLA CITAS (NUEVO STATUS) Y ODONTOGRAMA
     try: c.execute(f"ALTER TABLE citas ADD COLUMN estatus_asistencia TEXT")
     except: pass
@@ -217,8 +224,12 @@ def init_db():
     conn = get_db_connection()
     c = conn.cursor()
     # Tablas base (Pacientes, Citas, Auditoria, Asistencia, Servicios, Odontograma)
-    c.execute('''CREATE TABLE IF NOT EXISTS pacientes (id_paciente TEXT PRIMARY KEY, fecha_registro TEXT, nombre TEXT, apellido_paterno TEXT, apellido_materno TEXT, telefono TEXT, email TEXT, rfc TEXT, regimen TEXT, uso_cfdi TEXT, cp TEXT, nota_fiscal TEXT, sexo TEXT, estado TEXT, fecha_nacimiento TEXT, antecedentes_medicos TEXT, ahf TEXT, app TEXT, apnp TEXT, domicilio TEXT, tutor TEXT, parentesco_tutor TEXT, contacto_emergencia TEXT, telefono_emergencia TEXT, ocupacion TEXT, estado_civil TEXT, motivo_consulta TEXT, exploracion_fisica TEXT, diagnostico TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS citas (timestamp INTEGER, fecha TEXT, hora TEXT, id_paciente TEXT, nombre_paciente TEXT, tipo TEXT, tratamiento TEXT, diente TEXT, doctor_atendio TEXT, precio_lista REAL, precio_final REAL, porcentaje REAL, tiene_factura TEXT, iva REAL, subtotal REAL, metodo_pago TEXT, estado_pago TEXT, requiere_factura TEXT, notas TEXT, monto_pagado REAL, saldo_pendiente REAL, fecha_pago TEXT, costo_laboratorio REAL, categoria TEXT, duracion INTEGER, estatus_asistencia TEXT)''')
+    # [V48.0] Se agrega nota_administrativa a la creación inicial de pacientes
+    c.execute('''CREATE TABLE IF NOT EXISTS pacientes (id_paciente TEXT PRIMARY KEY, fecha_registro TEXT, nombre TEXT, apellido_paterno TEXT, apellido_materno TEXT, telefono TEXT, email TEXT, rfc TEXT, regimen TEXT, uso_cfdi TEXT, cp TEXT, nota_fiscal TEXT, sexo TEXT, estado TEXT, fecha_nacimiento TEXT, antecedentes_medicos TEXT, ahf TEXT, app TEXT, apnp TEXT, domicilio TEXT, tutor TEXT, parentesco_tutor TEXT, contacto_emergencia TEXT, telefono_emergencia TEXT, ocupacion TEXT, estado_civil TEXT, motivo_consulta TEXT, exploracion_fisica TEXT, diagnostico TEXT, nota_administrativa TEXT)''')
+    
+    # [V48.0] Se agrega observaciones a la creación inicial de citas
+    c.execute('''CREATE TABLE IF NOT EXISTS citas (timestamp INTEGER, fecha TEXT, hora TEXT, id_paciente TEXT, nombre_paciente TEXT, tipo TEXT, tratamiento TEXT, diente TEXT, doctor_atendio TEXT, precio_lista REAL, precio_final REAL, porcentaje REAL, tiene_factura TEXT, iva REAL, subtotal REAL, metodo_pago TEXT, estado_pago TEXT, requiere_factura TEXT, notas TEXT, monto_pagado REAL, saldo_pendiente REAL, fecha_pago TEXT, costo_laboratorio REAL, categoria TEXT, duracion INTEGER, estatus_asistencia TEXT, observaciones TEXT)''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS auditoria (id_evento INTEGER PRIMARY KEY AUTOINCREMENT, fecha_evento TEXT, usuario TEXT, accion TEXT, detalle TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS asistencia (id_registro INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, doctor TEXT, hora_entrada TEXT, hora_salida TEXT, horas_totales REAL, estado TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS servicios (categoria TEXT, nombre_tratamiento TEXT, precio_lista REAL, costo_laboratorio_base REAL, consent_level TEXT, duracion INTEGER)''')
@@ -234,7 +245,6 @@ def seed_data():
         c.executemany("INSERT INTO servicios (categoria, nombre_tratamiento, precio_lista, costo_laboratorio_base, consent_level, duracion) VALUES (?,?,?,?,?,?)", tratamientos)
         conn.commit()
     conn.close()
-
 init_db(); migrar_tablas(); seed_data()
 
 # ==========================================
