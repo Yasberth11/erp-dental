@@ -794,7 +794,7 @@ def vista_consultorio():
 
         st.title("📅 Agenda Profesional")
         
-        # --- ZONA 1: DASHBOARD OPERATIVO (MEJORA VISUAL) ---
+        # --- ZONA 1: DASHBOARD OPERATIVO ---
         hoy_str = get_fecha_mx()
         with st.expander(f"🔥 PACIENTES DEL DÍA: {hoy_str}", expanded=True):
             citas_hoy = pd.read_sql(f"SELECT rowid, * FROM citas WHERE fecha='{hoy_str}' AND estado_pago != 'CANCELADO' ORDER BY hora ASC", conn)
@@ -807,8 +807,14 @@ def vista_consultorio():
                         if r['estatus_asistencia'] == 'Asistió': color_status = "#28a745"; icono = "✅"
                         elif r['estatus_asistencia'] == 'No Asistió': color_status = "#dc3545"; icono = "❌"
                         
-                        # Tarjeta Visual
-                        st.markdown(f"""<div class="royal-card" style="border-left: 6px solid {color_status}; padding: 15px; min-height: 160px;"><div style="font-weight:bold; font-size:1.1em; color:#002B5B;">{r['hora']} - {r['nombre_paciente']}</div><div style="font-size:0.9em; color:#555; margin-bottom:10px;">{r['tratamiento']}<br>Dr. {r['doctor_atendio']}</div><div style="text-align:right; font-size:1.5em;">{icono}</div></div>""", unsafe_allow_html=True)
+                        # Uso de triples comillas para evitar errores de sintaxis en líneas largas
+                        st.markdown(f"""
+                        <div class="royal-card" style="border-left: 6px solid {color_status}; padding: 15px; min-height: 160px;">
+                            <div style="font-weight:bold; font-size:1.1em; color:#002B5B;">{r['hora']} - {r['nombre_paciente']}</div>
+                            <div style="font-size:0.9em; color:#555; margin-bottom:10px;">{r['tratamiento']}<br>Dr. {r['doctor_atendio']}</div>
+                            <div style="text-align:right; font-size:1.5em;">{icono}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
                         
                         c_b1, c_b2 = st.columns(2)
                         if c_b1.button("Llegó", key=f"lg_{r['rowid']}", use_container_width=True):
@@ -825,7 +831,7 @@ def vista_consultorio():
         with col_cal1:
             st.markdown("### 🛠️ Panel de Gestión")
             
-            # [V41 RESTAURADO] BUSCADOR
+            # [BUSCADOR]
             with st.expander("🔍 Buscar Cita Global", expanded=False):
                 q_cita = st.text_input("Buscar por nombre:", key="search_global_unique")
                 if q_cita:
@@ -833,7 +839,7 @@ def vista_consultorio():
                     df = pd.read_sql(query, conn)
                     st.dataframe(df, use_container_width=True, hide_index=True)
 
-            # [V41 RESTAURADO] GESTIÓN DE AGENDADO
+            # [GESTIÓN DE AGENDADO]
             fecha_ver_obj = st.date_input("📅 Visualizar Fecha:", datetime.now(TZ_MX)); fecha_ver_str = format_date_latino(fecha_ver_obj)
             
             with st.expander("➕ Agendar Cita Nueva", expanded=True):
@@ -910,7 +916,7 @@ def vista_consultorio():
                                  conn.commit(); st.success("Prospecto Agendado"); time.sleep(1); st.rerun()
                         else: st.error("Datos incompletos.")
 
-            # [V41 RESTAURADO] MODIFICAR AGENDA
+            # [MODIFICAR AGENDA]
             st.markdown("### 🔄 Modificar Agenda")
             df_c = pd.read_sql("SELECT * FROM citas", conn)
             if not df_c.empty:
@@ -946,7 +952,7 @@ def vista_consultorio():
                                 c.execute("DELETE FROM citas WHERE rowid=?", (id_target_row,))
                                 conn.commit(); st.error("Eliminado permanentemente."); time.sleep(1); st.rerun()
 
-        # === COLUMNA DERECHA: VISUALIZADOR (MEJORA V46 - FIX GAPS) ===
+        # === COLUMNA DERECHA: VISUALIZADOR ===
         with col_cal2:
             st.markdown(f"#### 🗓️ Visual: {fecha_ver_str}")
             df_c = pd.read_sql("SELECT * FROM citas", conn)
@@ -969,8 +975,9 @@ def vista_consultorio():
                                 else: ocupacion_map[bloque_str] = {"tipo": "bloqueado", "parent": r['nombre_paciente']}
                     except: pass
             
-            # HTML Bloque Único para evitar gaps visuales
-            html_agenda = "<div style='height: 600px; overflow-y: auto; padding: 5px; background-color: white; border: 1px solid #eee; border-radius: 8px;'>"
+            # [FIX SINTAXIS] Construcción segura con triples comillas
+            html_agenda = """<div style='height: 600px; overflow-y: auto; padding: 5px; background-color: white; border: 1px solid #eee; border-radius: 8px;'>"""
+            
             for slot in slots:
                 if slot in ocupacion_map:
                     info = ocupacion_map[slot]
@@ -978,12 +985,29 @@ def vista_consultorio():
                         r = info["data"]
                         color_border = "#FF5722" if "PROS" in str(r['id_paciente']) else "#002B5B"
                         bg_c = "#e3f2fd" if r['estatus_asistencia'] == 'Asistió' else "#f8f9fa"
-                        # Concatenación en linea para evitar errores
-                        html_agenda += f"<div style='padding:8px; margin-bottom:4px; background-color:{bg_c}; border-left:5px solid {color_border}; border-radius:4px; font-size:0.9em; box-shadow: 0 1px 2px rgba(0,0,0,0.1);'><b>{slot}</b> | {r['nombre_paciente']}<br><span style='color:#666; font-size:0.85em;'>{r['tratamiento']} ({info['dur']}m)</span></div>"
+                        
+                        html_agenda += f"""
+                        <div style='padding:8px; margin-bottom:4px; background-color:{bg_c}; border-left:5px solid {color_border}; border-radius:4px; font-size:0.9em; box-shadow: 0 1px 2px rgba(0,0,0,0.1);'>
+                            <b>{slot}</b> | {r['nombre_paciente']}<br>
+                            <span style='color:#666; font-size:0.85em;'>{r['tratamiento']} ({info['dur']}m)</span>
+                        </div>
+                        """
                     else: 
-                        html_agenda += f"<div style='padding:4px; margin-bottom:4px; background-color:#f1f1f1; color:#aaa; font-size:0.8em; margin-left: 15px; border-left: 2px solid #ddd;'>⬇️ <i>En tratamiento ({info['parent']})</i></div>"
+                        html_agenda += f"""
+                        <div style='padding:4px; margin-bottom:4px; background-color:#f1f1f1; color:#aaa; font-size:0.8em; margin-left: 15px; border-left: 2px solid #ddd;'>
+                            ⬇️ <i>En tratamiento ({info['parent']})</i>
+                        </div>
+                        """
                 else: 
-                    html_agenda += f"<div style='padding:8px; margin-bottom:2px; border-bottom:1px dashed #eee; display:flex; align-items:center;'><span style='font-weight:bold; color:#4CAF50; width:60px;'>{slot}</span><span style
+                    html_agenda += f"""
+                    <div style='padding:8px; margin-bottom:2px; border-bottom:1px dashed #eee; display:flex; align-items:center;'>
+                        <span style='font-weight:bold; color:#4CAF50; width:60px;'>{slot}</span>
+                        <span style='color:#81C784; font-size:0.9em;'>Disponible</span>
+                    </div>
+                    """
+            
+            html_agenda += "</div>"
+            st.markdown(html_agenda, unsafe_allow_html=True)
     
     elif menu == "2. Gestión Pacientes":
         st.title("📂 Expediente Clínico"); tab_b, tab_n, tab_e, tab_odo, tab_img = st.tabs(["🔍 BUSCAR", "➕ ALTA", "✏️ EDITAR", "🦷 ODONTOGRAMA", "📸 IMÁGENES"])
