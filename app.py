@@ -819,19 +819,12 @@ def vista_consultorio():
 
         st.divider()
 
-        # --- ZONA 2: GESTIÓN (RESTAURADA V41) Y VISUAL (OPTIMIZADA) ---
+        # --- ZONA 2: GESTIÓN Y VISUAL ---
         col_cal1, col_cal2 = st.columns([1, 1]) 
         
         with col_cal1:
             st.markdown("### 🛠️ Panel de Gestión")
             
-            # [V41 RESTAURADO] RECALL SYSTEM
-            with st.expander("🔔 Pacientes para Recall (> 6 Meses)", expanded=False):
-                try:
-                    df_recall = pd.read_sql("SELECT nombre_paciente, MAX(fecha) as ultima_cita FROM citas GROUP BY id_paciente", conn)
-                    st.dataframe(df_recall, use_container_width=True)
-                except: st.info("No hay datos suficientes.")
-
             # [V41 RESTAURADO] BUSCADOR
             with st.expander("🔍 Buscar Cita Global", expanded=False):
                 q_cita = st.text_input("Buscar por nombre:", key="search_global_unique")
@@ -846,7 +839,7 @@ def vista_consultorio():
             with st.expander("➕ Agendar Cita Nueva", expanded=True):
                 tab_reg, tab_new = st.tabs(["Registrado", "Prospecto"])
                 
-                # --- TAB REGISTRADO (V41 Logic) ---
+                # --- TAB REGISTRADO ---
                 with tab_reg:
                     servicios = pd.read_sql("SELECT * FROM servicios", conn); cats = servicios['categoria'].unique()
                     pacientes_raw = pd.read_sql("SELECT id_paciente, nombre, apellido_paterno FROM pacientes", conn)
@@ -880,7 +873,7 @@ def vista_consultorio():
                                  conn.commit(); st.success("Agendado"); time.sleep(1); st.rerun()
                          else: st.error("Seleccione un paciente.")
 
-                # --- TAB PROSPECTO (V41 Logic RESTAURADA COMPLETA) ---
+                # --- TAB PROSPECTO ---
                 with tab_new:
                     st.caption("Datos Básicos")
                     c_n1, c_n2 = st.columns(2)
@@ -917,7 +910,7 @@ def vista_consultorio():
                                  conn.commit(); st.success("Prospecto Agendado"); time.sleep(1); st.rerun()
                         else: st.error("Datos incompletos.")
 
-            # [V41 RESTAURADO] MODIFICAR AGENDA (MOVER/CANCELAR/ELIMINAR)
+            # [V41 RESTAURADO] MODIFICAR AGENDA
             st.markdown("### 🔄 Modificar Agenda")
             df_c = pd.read_sql("SELECT * FROM citas", conn)
             if not df_c.empty:
@@ -928,8 +921,6 @@ def vista_consultorio():
                 if cita_sel != "Seleccionar...":
                     hora_target = cita_sel.split(" - ")[0]
                     nom_target = cita_sel.split(" - ")[1].split(" (")[0]
-                    
-                    # Recuperamos ID para precisión
                     try: row_target = df_dia[(df_dia['hora'] == hora_target) & (df_dia['nombre_paciente'] == nom_target)].iloc[0]; id_target_row = row_target['rowid']
                     except: id_target_row = None
 
@@ -992,9 +983,7 @@ def vista_consultorio():
                     else: 
                         html_agenda += f"<div style='padding:4px; margin-bottom:4px; background-color:#f1f1f1; color:#aaa; font-size:0.8em; margin-left: 15px; border-left: 2px solid #ddd;'>⬇️ <i>En tratamiento ({info['parent']})</i></div>"
                 else: 
-                    html_agenda += f"<div style='padding:8px; margin-bottom:2px; border-bottom:1px dashed #eee; display:flex; align-items:center;'><span style='font-weight:bold; color:#4CAF50; width:60px;'>{slot}</span><span style='color:#81C784; font-size:0.9em;'>Disponible</span></div>"
-            html_agenda += "</div>"
-            st.markdown(html_agenda, unsafe_allow_html=True)
+                    html_agenda += f"<div style='padding:8px; margin-bottom:2px; border-bottom:1px dashed #eee; display:flex; align-items:center;'><span style='font-weight:bold; color:#4CAF50; width:60px;'>{slot}</span><span style
     
     elif menu == "2. Gestión Pacientes":
         st.title("📂 Expediente Clínico"); tab_b, tab_n, tab_e, tab_odo, tab_img = st.tabs(["🔍 BUSCAR", "➕ ALTA", "✏️ EDITAR", "🦷 ODONTOGRAMA", "📸 IMÁGENES"])
