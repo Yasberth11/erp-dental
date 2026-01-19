@@ -422,19 +422,29 @@ def registrar_movimiento(doctor, tipo):
 class PDFGenerator(FPDF):
     def __init__(self): super().__init__()
     def header(self):
+        # 1. LOGO: Reducimos el ancho de 50 a 30 y lo mantenemos a la izquierda
         if os.path.exists(LOGO_FILE):
-            try: self.image(LOGO_FILE, 10, 8, 50) # Logo Clínica Grande
+            try: self.image(LOGO_FILE, 10, 8, 30) 
             except: pass
         
-        # [V41.0] LOGO UNAM
-        #if os.path.exists(LOGO_UNAM):
-        #    try: self.image(LOGO_UNAM, 170, 8, 25) # Logo UNAM
-        #    except: pass
-
-        self.set_font('Arial', 'B', 14); self.set_text_color(0, 43, 91)
-        self.cell(0, 10, 'ROYAL DENTAL', 0, 1, 'C'); self.ln(1)
-        self.set_font('Arial', 'I', 9); self.set_text_color(100, 100, 100)
-        self.cell(0, 5, DIRECCION_CONSULTORIO, 0, 1, 'C'); self.ln(10)
+        # 2. TEXTO: Movemos el cursor a X=45 para dejar espacio al logo
+        self.set_xy(45, 10)
+        
+        # Título
+        self.set_font('Arial', 'B', 16) # Un poco más grande y legible
+        self.set_text_color(0, 43, 91)
+        self.cell(0, 10, 'ROYAL DENTAL', 0, 1, 'R') # Alineado a la derecha
+        
+        # Dirección
+        self.set_xy(45, 18) # Nos ubicamos debajo del título, respetando el margen del logo
+        self.set_font('Arial', 'I', 8) # Letra tamaño 8 para que quepa bien
+        self.set_text_color(100, 100, 100)
+        
+        # Usamos multi_cell para que la dirección no se encime si es muy larga
+        self.multi_cell(0, 4, DIRECCION_CONSULTORIO, 0, 'R')
+        
+        # Salto de línea final para separar del contenido
+        self.ln(10)
     def footer(self):
         self.set_y(-15); self.set_font('Arial', 'I', 8); self.set_text_color(128, 128, 128)
         self.cell(0, 10, f'Pagina {self.page_no()} - Documento Oficial Royal Dental', 0, 0, 'C')
