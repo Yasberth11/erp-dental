@@ -894,7 +894,7 @@ def vista_consultorio():
                         else: st.error("Datos incompletos.")
 
             with st.expander("🔍 Buscar Cita Global", expanded=False):
-                q_cita = st.text_input("Buscar por nombre:")
+                q_cita = st.text_input("Buscar por nombre:", key="buscador_agenda_global_unico")
                 if q_cita:
                     query = f"""SELECT c.rowid, c.fecha, c.hora, c.tratamiento, c.nombre_paciente, c.estado_pago FROM citas c WHERE c.nombre_paciente LIKE '%{formato_nombre_legal(q_cita)}%' ORDER BY c.timestamp DESC"""
                     df = pd.read_sql(query, conn)
@@ -1198,7 +1198,7 @@ def vista_consultorio():
 
     elif menu == "3. Planes de Tratamiento":
         st.title("💰 Finanzas")
-        pacientes = pd.read_sql("SELECT * FROM pacie    ntes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
+        pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         
         if not pacientes.empty:
             sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()); id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]; st.session_state.id_paciente_activo = id_p
