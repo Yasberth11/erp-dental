@@ -801,7 +801,7 @@ def vista_consultorio():
     conn = get_db_connection(); render_header(conn)
     if os.path.exists(LOGO_FILE): st.sidebar.image(LOGO_FILE, use_column_width=True)
     st.sidebar.markdown("### 🏥 Royal Dental"); st.sidebar.caption(f"Fecha: {get_fecha_mx()}")
-    menu = st.sidebar.radio("Menú", ["1. Agenda & Citas", "2. Gestión Pacientes", "3. Planes de Tratamiento", "4. Farmacia & Recetas", "5. Documentos & Firmas", "6. Control Asistencia"])
+    menu = st.sidebar.radio("Menú", ["1. Agenda & Citas", "2. Gestión de Pacientes", "3. Tratamientos", "4. Recetas", "5. Consentimientos", "6. Control Asistencia"])
     
     with st.sidebar.expander("🛠️ Mantenimiento"):
         if st.button("🗑️ RESETEAR BASE DE DATOS (CUIDADO)", type="primary"):
@@ -852,7 +852,7 @@ def vista_consultorio():
         if 'form_reset_id' not in st.session_state: st.session_state.form_reset_id = 0
         reset_id = st.session_state.form_reset_id
 
-        st.title("📅 Agenda Profesional")
+        st.title("📅 Control de Citas")
         
         # [SELECTOR DE FECHA MAESTRO]
         col_fecha, col_resumen = st.columns([1, 3])
@@ -1089,8 +1089,8 @@ def vista_consultorio():
             html_parts.append("</div>")
             st.markdown("".join(html_parts), unsafe_allow_html=True)
     
-    elif menu == "2. Gestión Pacientes":
-        st.title("📂 Expediente Clínico"); tab_b, tab_n, tab_e, tab_odo, tab_img = st.tabs(["🔍 BUSCAR", "➕ ALTA", "✏️ EDITAR", "🦷 ODONTOGRAMA", "📸 IMÁGENES"])
+    elif menu == "2. Gestión de Pacientes":
+        st.title(" 📇 Expediente Clínico Digital"); tab_b, tab_n, tab_e, tab_odo, tab_img = st.tabs(["🔍 BUSCAR", "➕ ALTA", "✏️ EDITAR", "🦷 ODONTOGRAMA", "📸 IMÁGENES"])
         with tab_b:
             # [V46.0] RESTAURACIÓN COMPLETA VISUAL ROYAL CARD
             pacientes_raw = pd.read_sql("SELECT * FROM pacientes", conn)
@@ -1261,9 +1261,9 @@ def vista_consultorio():
                 if os.path.exists(path):
                     for f in os.listdir(path): st.image(os.path.join(path,f), caption=f, width=200)
 
-    elif menu == "4. Farmacia & Recetas":
+    elif menu == "4. Recetas":
         # ... (Mantener V44 que funciona) ...
-        st.title("💊 Farmacia Clínica")
+        st.title("📝 Prescripción Clínica")
         pacientes = pd.read_sql("SELECT id_paciente, nombre, apellido_paterno FROM pacientes", conn)
         if not pacientes.empty:
             lista_pacientes = pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
@@ -1291,8 +1291,8 @@ def vista_consultorio():
                         pdf_bytes = crear_pdf_receta(datos_receta); st.download_button("Descargar PDF Receta", pdf_bytes, f"RECETA_{p['nombre']}.pdf", "application/pdf")
             else: st.info("Seleccione un paciente para comenzar.")
 
-    elif menu == "3. Planes de Tratamiento":
-        st.title("💰 Finanzas")
+    elif menu == "3. Tratamientos":
+        st.title(" 🩺 Ejecución Clínica & Cobros")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         
         if not pacientes.empty:
@@ -1432,8 +1432,8 @@ def vista_consultorio():
                         pdf_bytes = crear_recibo_pago(datos_pdf); clean_name = f"RECIBO_{datos_pdf['folio']}.pdf"; st.download_button("📥 Bajar PDF", pdf_bytes, clean_name, "application/pdf")
                 else: st.info("No hay movimientos financieros registrados.")
 
-    elif menu == "5. Documentos & Firmas":
-        st.title("⚖️ Centro Legal"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
+    elif menu == "5. Consentimientos":
+        st.title("✒️ Blindaje Legal"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
         if not df_p.empty:
             sel = st.selectbox("Paciente:", ["..."]+df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()); 
             if sel != "...":
@@ -1485,7 +1485,7 @@ def vista_consultorio():
                 else: st.warning("⚠️ No se genera documento legal para este concepto.")
 
     elif menu == "6. Control Asistencia":
-        st.title("⏱️ Checador"); col_a, col_b = st.columns(2)
+        st.title("🆔 Asistencia"); col_a, col_b = st.columns(2)
         with col_a:
             if st.button("Entrada Dr. Emmanuel"): 
                 ok, m = registrar_movimiento("Dr. Emmanuel", "Entrada")
