@@ -789,30 +789,40 @@ def vista_consultorio():
     if st.sidebar.button("Cerrar Sesión"): st.session_state.perfil = None; st.rerun()
 
     if menu == "1. Agenda & Citas":
-        # [ESTILO LOCAL PARA LISTA COMPACTA]
-        # Ajusta el padding de los botones y contenedores para que se vean delgados y elegantes
+        # [ESTILO CSS OPTIMIZADO PARA LISTA COMPACTA]
         st.markdown("""
             <style>
             div[data-testid="column"] { justify-content: flex-start !important; }
+            
+            /* Estilo de los botones dentro de la lista */
             .stButton button {
-                padding: 0.25rem 0.5rem !important; /* Botones más delgados */
-                font-size: 0.9rem !important;
-                min-height: 0px !important;
+                padding: 2px 8px !important; 
+                font-size: 0.85rem !important;
                 height: auto !important;
+                min-height: 0px !important;
+                margin-top: 0px !important;
             }
-            /* Estilo para la fila de la lista */
-            .cita-row {
-                border-left: 4px solid #ddd;
+            
+            /* Fila de la Cita */
+            .cita-row-compact {
                 background-color: white;
-                padding: 10px;
-                margin-bottom: 8px;
-                border-radius: 4px;
+                padding: 8px 12px;
+                border-radius: 6px;
                 box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                margin-bottom: 4px; /* Espacio mínimo entre filas */
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
             }
+            
+            /* Textos */
+            .cita-time { font-weight: bold; color: #002B5B; font-size: 1rem; width: 60px; }
+            .cita-name { font-weight: 600; color: #333; font-size: 0.95rem; margin-bottom: 2px; }
+            .cita-desc { color: #666; font-size: 0.8rem; }
             </style>
         """, unsafe_allow_html=True)
         
-        # Inicializador de limpieza
+        # Inicializador de estados
         if 'form_reset_id' not in st.session_state: st.session_state.form_reset_id = 0
         reset_id = st.session_state.form_reset_id
 
@@ -826,97 +836,90 @@ def vista_consultorio():
             es_hoy = (fecha_ver_str == get_fecha_mx())
         
         # ==============================================================================
-        # ZONA 1: DASHBOARD DE GESTIÓN (NUEVA VISTA DE LISTA COMPACTA Y ELEGANTE)
+        # ZONA 1: DASHBOARD SCROLLABLE (LA "CAJA" QUE PEDISTE)
         # ==============================================================================
-        with st.expander(f"⚡ GESTIÓN RÁPIDA: {fecha_ver_str}", expanded=True):
-            citas_dia = pd.read_sql(f"SELECT rowid, * FROM citas WHERE fecha='{fecha_ver_str}' AND estado_pago != 'CANCELADO' ORDER BY hora ASC", conn)
-            
-            if not citas_dia.empty:
-                # Cabecera de la lista (opcional, para dar más orden)
-                # st.markdown("<div style='display:flex; color:#666; font-size:0.8em; margin-bottom:5px;'><div style='flex:1'>Horario</div><div style='flex:3'>Paciente/Tratamiento</div><div style='flex:1'>Estatus</div><div style='flex:2; text-align:right'>Acciones Rápida</div></div>", unsafe_allow_html=True)
-
-                # Iteramos por cada cita para crear una FILA compacta
+        st.markdown(f"#### ⚡ Gestión Rápida: {fecha_ver_str}")
+        
+        # Traemos datos
+        citas_dia = pd.read_sql(f"SELECT rowid, * FROM citas WHERE fecha='{fecha_ver_str}' AND estado_pago != 'CANCELADO' ORDER BY hora ASC", conn)
+        
+        if not citas_dia.empty:
+            # [NUEVO] CAJA CON SCROLL (HEIGHT=400px)
+            # Esto crea el efecto de "ver los primeros 5 y bajar para ver más"
+            with st.container(height=400, border=True):
+                
                 for i, (_, r) in enumerate(citas_dia.iterrows()):
                     rowid = r['rowid']
                     estatus = r.get('estatus_asistencia', 'Programada')
                     
-                    # Determinamos colores e iconos
-                    color_borde = "#D4AF37" # Dorado (Pendiente)
-                    icono_st = "⏳"
-                    bg_color = "#ffffff" # Fondo blanco default
-                    
+                    # Colores de Estado
+                    color_borde = "#D4AF37" # Dorado
+                    bg_row = "#ffffff"
                     if estatus == 'Asistió': 
-                        color_borde = "#28a745"; icono_st = "✅"; bg_color = "#f0fff4" # Verde claro
+                        color_borde = "#28a745"; bg_row = "#f0fff4"
                     elif estatus == 'No Asistió': 
-                        color_borde = "#dc3545"; icono_st = "❌"; bg_color = "#fff0f0" # Rojo claro
+                        color_borde = "#dc3545"; bg_row = "#fff5f5"
 
-                    # --- CONSTRUCCIÓN DE LA FILA VISUAL ---
-                    # Usamos un contenedor con estilo personalizado para que parezca una fila de lista moderna
-                    with st.container():
-                        st.markdown(f"""
-                        <div class="cita-row" style="border-left: 4px solid {color_borde}; background-color: {bg_color}; display: flex; align-items: center;">
-                            <div style="font-weight:bold; font-size:1.1em; color:#002B5B; width: 80px;">{r['hora']}</div>
-                            <div style="flex-grow: 1; padding-left: 15px;">
-                                <div style="font-weight:bold; color:#333;">{r['nombre_paciente']}</div>
-                                <div style="font-size:0.85em; color:#666;">{r['tratamiento']} | Dr. {r['doctor_atendio']}</div>
+                    # 1. VISUAL (HTML Compacto)
+                    st.markdown(f"""
+                    <div class="cita-row-compact" style="border-left: 4px solid {color_borde}; background-color: {bg_row};">
+                        <div style="display:flex; align-items:center; flex-grow:1;">
+                            <div class="cita-time">{r['hora']}</div>
+                            <div style="padding-left: 10px;">
+                                <div class="cita-name">{r['nombre_paciente']}</div>
+                                <div class="cita-desc">{r['tratamiento']}</div>
                             </div>
-                            <div style="font-size:1.2em; padding-right: 15px;">{icono_st}</div>
                         </div>
-                        """, unsafe_allow_html=True)
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                        # --- BOTONERA COMPACTA DE ACCIONES (Debajo de la info visual) ---
-                        # Usamos columnas muy estrechas para iconos pequeños
-                        # c_b1: Asistió (✅), c_b2: Faltó (❌), c_b3: Espacio, c_b4: Mover (🔄), c_b5: Cancelar (🚫)
-                        c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns([1, 1, 2, 1, 1])
-                        
-                        # Botones de Asistencia (Solo si es HOY o PASADO)
-                        if es_hoy or fecha_ver_obj <= datetime.now(TZ_MX).date():
-                            with c_b1:
-                                if st.button("✅", key=f"lg_ic_{rowid}", help="Marcar como ASISTIÓ", use_container_width=True):
-                                     c = conn.cursor(); c.execute("UPDATE citas SET estatus_asistencia='Asistió' WHERE rowid=?", (rowid,)); conn.commit(); st.rerun()
-                            with c_b2:
-                                if st.button("❌", key=f"ft_ic_{rowid}", help="Marcar como FALTÓ", use_container_width=True):
-                                     c = conn.cursor(); nota = f"\n[SISTEMA]: Inasistencia {fecha_ver_str}."; c.execute("UPDATE citas SET estatus_asistencia='No Asistió', notas=ifnull(notas,'') || ? WHERE rowid=?", (nota, rowid)); conn.commit(); st.warning("Falta registrada"); time.sleep(0.5); st.rerun()
-                        
-                        # Botones de Gestión (Siempre visibles)
-                        with c_b4:
-                            # Botón Reprogramar (Toggle)
-                            if st.button("🔄", key=f"mov_ic_{rowid}", help="REPROGRAMAR Cita", use_container_width=True):
-                                st.session_state[f"edit_mode_{rowid}"] = not st.session_state.get(f"edit_mode_{rowid}", False)
-                        with c_b5:
-                            # Botón Cancelar
-                            if st.button("🚫", key=f"can_ic_{rowid}", help="CANCELAR Cita definitivamente", use_container_width=True):
-                                 c = conn.cursor(); c.execute("UPDATE citas SET estado_pago='CANCELADO', estatus_asistencia='Canceló' WHERE rowid=?", (rowid,)); conn.commit(); st.success("Cancelada"); time.sleep(0.5); st.rerun()
+                    # 2. BOTONERA (Debajo de cada fila visual, muy pegadita)
+                    # c1: Asistencia, c2: Falta, c3: Espacio, c4: Mover, c5: Cancelar
+                    c_btns = st.columns([1, 1, 4, 1, 1])
+                    
+                    # Solo mostrar botones de asistencia si es HOY o PASADO
+                    if es_hoy or fecha_ver_obj <= datetime.now(TZ_MX).date():
+                        with c_btns[0]:
+                            if st.button("✅", key=f"ok_{rowid}", help="Asistió"):
+                                c = conn.cursor(); c.execute("UPDATE citas SET estatus_asistencia='Asistió' WHERE rowid=?", (rowid,)); conn.commit(); st.rerun()
+                        with c_btns[1]:
+                            if st.button("❌", key=f"no_{rowid}", help="No Asistió"):
+                                c = conn.cursor(); nota = f"\n[SISTEMA]: Inasistencia {fecha_ver_str}."; c.execute("UPDATE citas SET estatus_asistencia='No Asistió', notas=ifnull(notas,'') || ? WHERE rowid=?", (nota, rowid)); conn.commit(); st.warning("Falta"); time.sleep(0.5); st.rerun()
+                    
+                    # Botones de Gestión siempre disponibles
+                    with c_btns[3]:
+                        if st.button("🔄", key=f"ed_{rowid}", help="Reprogramar"):
+                            # Toggle del modo edición
+                            st.session_state[f"edit_mode_{rowid}"] = not st.session_state.get(f"edit_mode_{rowid}", False)
+                    with c_btns[4]:
+                        if st.button("🚫", key=f"del_{rowid}", help="Cancelar Cita"):
+                            c = conn.cursor(); c.execute("UPDATE citas SET estado_pago='CANCELADO', estatus_asistencia='Canceló' WHERE rowid=?", (rowid,)); conn.commit(); st.success("Cancelada"); time.sleep(0.5); st.rerun()
 
-                        # --- SECCIÓN DESPLEGABLE PARA REPROGRAMAR (Se abre al dar clic en 🔄) ---
-                        if st.session_state.get(f"edit_mode_{rowid}", False):
-                            with st.container():
-                                st.info("Reprogramando cita...")
-                                col_rf, col_rh, col_rb = st.columns([2, 2, 1])
-                                n_fecha = col_rf.date_input("Nueva Fecha", datetime.now(TZ_MX), key=f"nf_{rowid}", label_visibility="collapsed")
-                                n_hora = col_rh.selectbox("Nueva Hora", generar_slots_tiempo(), key=f"nh_{rowid}", label_visibility="collapsed")
-                                
-                                if col_rb.button("💾 Guardar", key=f"save_{rowid}", use_container_width=True):
-                                    # Validar que la fecha/hora sean diferentes
-                                    if format_date_latino(n_fecha) == r['fecha'] and n_hora == r['hora']:
-                                         st.warning("Seleccione una fecha u hora diferente.")
-                                    else:
-                                        c = conn.cursor()
-                                        # Actualizamos fecha, hora y reseteamos estatus a Programada
-                                        c.execute("UPDATE citas SET fecha=?, hora=?, estatus_asistencia='Programada' WHERE rowid=?", (format_date_latino(n_fecha), n_hora, rowid))
-                                        conn.commit()
-                                        st.success("Cita reagendada.")
-                                        del st.session_state[f"edit_mode_{rowid}"] # Limpiamos estado
-                                        time.sleep(0.8); st.rerun()
-                        
-                        st.divider() # Línea separadora sutil entre citas
+                    # 3. PANEL DE REPROGRAMACIÓN (Se despliega solo si das click en 🔄)
+                    if st.session_state.get(f"edit_mode_{rowid}", False):
+                        with st.container():
+                            cc1, cc2, cc3 = st.columns([2, 2, 1])
+                            n_f = cc1.date_input("Fecha", datetime.now(TZ_MX), key=f"nf_{rowid}", label_visibility="collapsed")
+                            n_h = cc2.selectbox("Hora", generar_slots_tiempo(), key=f"nh_{rowid}", label_visibility="collapsed")
+                            if cc3.button("💾", key=f"sv_{rowid}"):
+                                c = conn.cursor()
+                                # Limpiamos estatus al mover
+                                c.execute("UPDATE citas SET fecha=?, hora=?, estatus_asistencia='Programada' WHERE rowid=?", (format_date_latino(n_f), n_h, rowid))
+                                conn.commit()
+                                del st.session_state[f"edit_mode_{rowid}"] # Limpiar estado visual
+                                st.success("Movido")
+                                time.sleep(0.5); st.rerun()
+                    
+                    st.markdown("<div style='margin-bottom: 8px;'></div>", unsafe_allow_html=True) # Pequeño separador real
 
-            else: st.info(f"☕ No hay citas programadas para el {fecha_ver_str}.")
+        else:
+            # Estado vacío elegante
+            st.info(f"☕ Agenda libre para el {fecha_ver_str}. Disfruta tu café.")
 
         st.divider()
 
         # ==============================================================================
-        # ZONA 2: FORMULARIOS Y VISUALIZADOR (SIN CAMBIOS FUNCIONALES, SOLO ESTÉTICOS)
+        # ZONA 2: FORMULARIOS Y VISUALIZADOR (MANTENIDO IGUAL)
         # ==============================================================================
         col_cal1, col_cal2 = st.columns([1, 1]) 
         
@@ -925,13 +928,13 @@ def vista_consultorio():
             
             # [BUSCADOR]
             with st.expander("🔍 Buscar Cita (Global)", expanded=False):
-                q_cita = st.text_input("Nombre del paciente:", key="search_global_v47")
+                q_cita = st.text_input("Nombre del paciente:", key="search_global_v471")
                 if q_cita:
                     query = f"""SELECT c.rowid, c.fecha, c.hora, c.tratamiento, c.nombre_paciente, c.estatus_asistencia FROM citas c WHERE c.nombre_paciente LIKE '%{formato_nombre_legal(q_cita)}%' ORDER BY c.timestamp DESC"""
                     df = pd.read_sql(query, conn)
                     st.dataframe(df, use_container_width=True, hide_index=True)
 
-            # [AGENDAR CITA NUEVA - ROBUSTA V46.16]
+            # [AGENDAR CITA NUEVA - CON RESET ID]
             with st.expander("➕ Agendar Cita Nueva", expanded=True):
                 tab_reg, tab_new = st.tabs(["Registrado", "Prospecto"])
                 
@@ -941,7 +944,6 @@ def vista_consultorio():
                     pacientes_raw = pd.read_sql("SELECT id_paciente, nombre, apellido_paterno FROM pacientes", conn)
                     lista_pac = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist() if not pacientes_raw.empty else []
                     
-                    # Keys dinámicos (reset_id) para limpieza
                     p_sel_r = st.selectbox("Paciente*", ["Seleccionar..."] + lista_pac, key=f"p_reg_{reset_id}")
                     cat_sel_r = st.selectbox("Categoría", cats, key=f"cat_reg_{reset_id}")
                     trats_filtrados_r = servicios[servicios['categoria'] == cat_sel_r]['nombre_tratamiento'].unique()
@@ -957,7 +959,6 @@ def vista_consultorio():
                     h_sel_r = c_d2.selectbox("Hora Inicio", generar_slots_tiempo(), key=f"hora_reg_{reset_id}")
                     d_sel_r = st.selectbox("Doctor", LISTA_DOCTORES, key=f"doc_reg_{reset_id}")
                     
-                    # Checkbox de Urgencia VISIBLE
                     urgencia_r = st.checkbox("🚨 Agendar como Urgencia (Permitir cruce)", key=f"urg_reg_{reset_id}")
                     
                     if st.button("💾 Confirmar Cita (Registrado)", use_container_width=True):
@@ -972,8 +973,7 @@ def vista_consultorio():
                                            (int(time.time()), fecha_ver_str, h_sel_r, id_p, nom_p, cat_sel_r, trat_sel_r, d_sel_r, "Pendiente", "Programada", duracion_cita_r, f"Cita: {trat_sel_r}"))
                                  conn.commit()
                                  st.success("Agendado")
-                                 # Incrementamos ID para resetear widgets
-                                 st.session_state.form_reset_id += 1
+                                 st.session_state.form_reset_id += 1 # Limpieza
                                  time.sleep(1); st.rerun()
                          else: st.error("Seleccione un paciente.")
 
@@ -998,14 +998,13 @@ def vista_consultorio():
                     hora_pros = c_tp2.selectbox("Hora Inicio", generar_slots_tiempo(), key=f"hora_pros_{reset_id}")
                     doc_pros = st.selectbox("Doctor", LISTA_DOCTORES, key=f"doc_pros_{reset_id}")
                     
-                    # Checkbox de Urgencia VISIBLE
                     urgencia_p = st.checkbox("🚨 Es Urgencia / Sobrecupo", key=f"urg_pros_{reset_id}")
                     
                     if st.button("💾 Agendar Prospecto", use_container_width=True):
                         if nom_pros and len(tel_pros) == 10:
                              ocupado = verificar_disponibilidad(fecha_ver_str, hora_pros, duracion_cita_p)
                              if ocupado and not urgencia_p: 
-                                 st.error("⚠️ Horario Ocupado")
+                                 st.error("⚠️ Horario OCUPADO. Marque 'Urgencia' para empalmar.")
                              else:
                                  id_temp = f"PROS-{int(time.time())}"
                                  c = conn.cursor()
@@ -1013,12 +1012,11 @@ def vista_consultorio():
                                            (int(time.time()), fecha_ver_str, hora_pros, id_temp, formato_nombre_legal(nom_pros), "Primera Vez", trat_sel_p, doc_pros, "Pendiente", "Programada", f"Tel: {tel_pros}", duracion_cita_p))
                                  conn.commit()
                                  st.success("Prospecto Agendado")
-                                 # Reset
-                                 st.session_state.form_reset_id += 1
+                                 st.session_state.form_reset_id += 1 # Limpieza
                                  time.sleep(1); st.rerun()
                         else: st.error("Datos incompletos.")
 
-        # === COLUMNA DERECHA: VISUALIZADOR (MANTENIDO) ===
+        # === COLUMNA DERECHA: VISUALIZADOR ===
         with col_cal2:
             st.markdown(f"#### 🗓️ Visual: {fecha_ver_str}")
             df_c = pd.read_sql("SELECT * FROM citas", conn)
