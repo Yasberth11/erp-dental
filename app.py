@@ -1090,8 +1090,7 @@ def vista_consultorio():
                         
                         hoy = datetime.now(TZ_MX).date(); df_raw_notas = pd.read_sql(f"SELECT fecha, tratamiento, notas FROM citas WHERE id_paciente='{id_sel_str}' ORDER BY timestamp DESC", conn); df_raw_notas['fecha_dt'] = pd.to_datetime(df_raw_notas['fecha'], format="%d/%m/%Y", errors='coerce').dt.date; hist_notas = df_raw_notas[df_raw_notas['fecha_dt'] <= hoy].drop(columns=['fecha_dt'])
                         if st.button("🖨️ Descargar Historia (PDF)"): 
-                            # [V47.2] FILTRO DE PUREZA CLÍNICA (NOM-004)
-                            # 1. Recuperamos datos con columnas extra para filtrar
+                            # 1. Recuperamos datos
                             query_historia = f"""
                                 SELECT fecha, tratamiento, notas, categoria, estatus_asistencia 
                                 FROM citas 
@@ -1100,25 +1099,33 @@ def vista_consultorio():
                             """
                             df_raw_notas = pd.read_sql(query_historia, conn)
                             
-                            # 2. Aplicamos filtros legales
-                            # A) Filtro Financiero: Excluir cobros, abonos y deudas
+                            # 2. FILTRO DE PUREZA CLÍNICA (CORREGIDO / MÁS FLEXIBLE)
+                            
+                            # A) Filtro Financiero: (Esto se mantiene estricto)
+                            # Excluye Categoría 'Financiero' Y cualquier tratamiento que diga "ABONO"
                             filtro_no_dinero = (df_raw_notas['categoria'] != 'Financiero') & \
                                                (~df_raw_notas['tratamiento'].str.contains("ABONO", case=False, na=False))
                             
-                            # B) Filtro de Realidad: Solo procedimientos donde el paciente ASISTIÓ
-                            filtro_asistencia = (df_raw_notas['estatus_asistencia'] == 'Asistió')
+                            # B) Filtro de Visibilidad (Ajustado para datos históricos):
+                            # Muestra TODO excepto lo que esté explícitamente Cancelado o Faltó.
+                            # Esto permite ver citas "Programadas" o antiguas sin estatus.
+                            filtro_estado = (~df_raw_notas['estatus_asistencia'].isin(['Canceló', 'No Asistió', 'CANCELADO']))
                             
-                            # Aplicar y limpiar columnas
-                            hist_notas_limpia = df_raw_notas[filtro_no_dinero & filtro_asistencia].copy()
-                            hist_notas_limpia = hist_notas_limpia[['fecha', 'tratamiento', 'notas']] # Solo columnas clínicas
+                            # C) Filtro de Contenido (Opcional): 
+                            # Asegura que al menos haya un tratamiento o una nota que mostrar
+                            filtro_contenido = (df_raw_notas['tratamiento'] != '') | (df_raw_notas['notas'] != '')
+
+                            # Aplicar filtros conjuntos
+                            hist_notas_limpia = df_raw_notas[filtro_no_dinero & filtro_estado & filtro_contenido].copy()
                             
-                            # 3. Generar PDF Blindado
-                            # NOTA: Si tu función crear_pdf_historia solo acepta 2 argumentos, borra ", odo_data"
+                            # Limpieza de columnas para el PDF
+                            hist_notas_limpia = hist_notas_limpia[['fecha', 'tratamiento', 'notas']]
+                            
+                            # 3. Generar PDF
                             try:
                                 odo_data = obtener_estado_dientes(id_sel_str)
                                 pdf_bytes = crear_pdf_historia(p_data, hist_notas_limpia, odo_data)
                             except TypeError:
-                                # Fallback por si tienes la versión anterior de la función
                                 pdf_bytes = crear_pdf_historia(p_data, hist_notas_limpia)
                                 
                             clean_name = f"{p_data['id_paciente']}_HISTORIAL_LEGAL.pdf"
