@@ -792,6 +792,10 @@ def vista_consultorio():
         # [FIX CSS] Alineación superior forzada
         st.markdown("""<style>div[data-testid="column"] { justify-content: flex-start !important; }</style>""", unsafe_allow_html=True)
 
+        # [FIX LIMPIEZA] Inicializador de estado para resetear formularios
+        if 'form_reset_id' not in st.session_state: st.session_state.form_reset_id = 0
+        reset_id = st.session_state.form_reset_id
+
         st.title("📅 Agenda Profesional")
         
         # [SELECTOR DE FECHA MAESTRO]
@@ -818,12 +822,14 @@ def vista_consultorio():
                         st.markdown(f"""<div class="royal-card" style="border-left: 6px solid {color_status}; padding: 15px; margin-bottom:10px; min-height: 180px;"><div style="font-weight:bold; font-size:1.1em; color:#002B5B;">{r['hora']}</div><div style="font-weight:bold; font-size:1em; color:#333; margin-bottom:5px;">{r['nombre_paciente']}</div><div style="font-size:0.85em; color:#666; margin-bottom:10px;">{r['tratamiento']}<br>Dr. {r['doctor_atendio']}</div><div style="text-align:right; font-weight:bold; color:{color_status};">{icono}</div></div>""", unsafe_allow_html=True)
                         
                         c_b1, c_b2 = st.columns(2)
+                        # Botones de Asistencia (Solo Hoy/Pasado)
                         if es_hoy or fecha_ver_obj <= datetime.now(TZ_MX).date():
                             if c_b1.button("Llegó", key=f"lg_{r['rowid']}", use_container_width=True):
                                  c = conn.cursor(); c.execute("UPDATE citas SET estatus_asistencia='Asistió' WHERE rowid=?", (r['rowid'],)); conn.commit(); st.rerun()
                             if c_b2.button("Faltó", key=f"ft_{r['rowid']}", use_container_width=True):
                                  c = conn.cursor(); nota = f"\n[SISTEMA]: Inasistencia {fecha_ver_str}."; c.execute("UPDATE citas SET estatus_asistencia='No Asistió', notas=ifnull(notas,'') || ? WHERE rowid=?", (nota, r['rowid'])); conn.commit(); st.warning("Falta registrada"); time.sleep(1); st.rerun()
                         
+                        # Botones de Gestión
                         c_b3, c_b4 = st.columns(2)
                         if c_b3.button("Mover", key=f"mov_{r['rowid']}", use_container_width=True):
                             st.session_state[f"edit_mode_{r['rowid']}"] = not st.session_state.get(f"edit_mode_{r['rowid']}", False)
@@ -850,25 +856,27 @@ def vista_consultorio():
             
             # [BUSCADOR]
             with st.expander("🔍 Buscar Cita (Global)", expanded=False):
-                q_cita = st.text_input("Nombre del paciente:", key="search_global_v4614")
+                q_cita = st.text_input("Nombre del paciente:", key="search_global_v4616")
                 if q_cita:
                     query = f"""SELECT c.rowid, c.fecha, c.hora, c.tratamiento, c.nombre_paciente, c.estatus_asistencia FROM citas c WHERE c.nombre_paciente LIKE '%{formato_nombre_legal(q_cita)}%' ORDER BY c.timestamp DESC"""
                     df = pd.read_sql(query, conn)
                     st.dataframe(df, use_container_width=True, hide_index=True)
 
-            # [AGENDAR CITA NUEVA - CON LIMPIEZA AUTOMÁTICA]
+            # [AGENDAR CITA NUEVA - FIX LIMPIEZA & URGENCIA]
             with st.expander("➕ Agendar Cita Nueva", expanded=True):
                 tab_reg, tab_new = st.tabs(["Registrado", "Prospecto"])
                 
+                # --- TAB REGISTRADO ---
                 with tab_reg:
                     servicios = pd.read_sql("SELECT * FROM servicios", conn); cats = servicios['categoria'].unique()
                     pacientes_raw = pd.read_sql("SELECT id_paciente, nombre, apellido_paterno FROM pacientes", conn)
                     lista_pac = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist() if not pacientes_raw.empty else []
                     
-                    p_sel_r = st.selectbox("Paciente*", ["Seleccionar..."] + lista_pac, key="p_reg_v41")
-                    cat_sel_r = st.selectbox("Categoría", cats, key="cat_reg_v41")
+                    # Keys dinámicos para forzar limpieza (reset_id)
+                    p_sel_r = st.selectbox("Paciente*", ["Seleccionar..."] + lista_pac, key=f"p_reg_{reset_id}")
+                    cat_sel_r = st.selectbox("Categoría", cats, key=f"cat_reg_{reset_id}")
                     trats_filtrados_r = servicios[servicios['categoria'] == cat_sel_r]['nombre_tratamiento'].unique()
-                    trat_sel_r = st.selectbox("Tratamiento*", trats_filtrados_r, key="trat_reg_v41")
+                    trat_sel_r = st.selectbox("Tratamiento*", trats_filtrados_r, key=f"trat_reg_{reset_id}")
                     
                     dur_default_r = 30
                     if trat_sel_r:
@@ -876,15 +884,18 @@ def vista_consultorio():
                         if not row_dur.empty: dur_default_r = int(row_dur.iloc[0]['duracion'])
                     
                     c_d1, c_d2 = st.columns(2)
-                    duracion_cita_r = c_d1.number_input("Minutos", value=dur_default_r, step=30, key="dur_reg_v41")
-                    h_sel_r = c_d2.selectbox("Hora Inicio", generar_slots_tiempo(), key="hora_reg_v41")
-                    d_sel_r = st.selectbox("Doctor", LISTA_DOCTORES, key="doc_reg_v41")
-                    urgencia_r = st.checkbox("🚨 Urgencia", key="urg_reg_v41")
+                    duracion_cita_r = c_d1.number_input("Minutos", value=dur_default_r, step=30, key=f"dur_reg_{reset_id}")
+                    h_sel_r = c_d2.selectbox("Hora Inicio", generar_slots_tiempo(), key=f"hora_reg_{reset_id}")
+                    d_sel_r = st.selectbox("Doctor", LISTA_DOCTORES, key=f"doc_reg_{reset_id}")
+                    
+                    # [V41 URGENCIA] Reimplementado visiblemente
+                    urgencia_r = st.checkbox("🚨 Agendar como Urgencia (Permitir cruce de horario)", key=f"urg_reg_{reset_id}")
                     
                     if st.button("💾 Confirmar Cita (Registrado)", use_container_width=True):
                          if p_sel_r != "Seleccionar...":
                              ocupado = verificar_disponibilidad(fecha_ver_str, h_sel_r, duracion_cita_r)
-                             if ocupado and not urgencia_r: st.error("⚠️ Horario OCUPADO.")
+                             if ocupado and not urgencia_r: 
+                                 st.error("⚠️ Horario OCUPADO. Marque 'Urgencia' para empalmar.")
                              else:
                                  id_p = p_sel_r.split(" - ")[0]; nom_p = p_sel_r.split(" - ")[1]
                                  c = conn.cursor()
@@ -892,24 +903,21 @@ def vista_consultorio():
                                            (int(time.time()), fecha_ver_str, h_sel_r, id_p, nom_p, cat_sel_r, trat_sel_r, d_sel_r, "Pendiente", "Programada", duracion_cita_r, f"Cita: {trat_sel_r}"))
                                  conn.commit()
                                  st.success("Agendado")
-                                 
-                                 # [MEJORA] LIMPIEZA DE FORMULARIO REGISTRADO
-                                 keys_to_clear = ["p_reg_v41", "cat_reg_v41", "trat_reg_v41", "dur_reg_v41", "hora_reg_v41", "doc_reg_v41", "urg_reg_v41"]
-                                 for k in keys_to_clear:
-                                     if k in st.session_state: del st.session_state[k]
-                                 
+                                 # [TRUCO MAESTRO] Incrementamos ID para resetear widgets al recargar
+                                 st.session_state.form_reset_id += 1
                                  time.sleep(1); st.rerun()
                          else: st.error("Seleccione un paciente.")
 
+                # --- TAB PROSPECTO ---
                 with tab_new:
                     c_n1, c_n2 = st.columns(2)
-                    nom_pros = c_n1.text_input("Nombre Completo*", key="new_p_nom_v41")
-                    tel_pros = c_n2.text_input("Teléfono (10)*", key="new_p_tel_v41", max_chars=10)
+                    nom_pros = c_n1.text_input("Nombre Completo*", key=f"new_p_nom_{reset_id}")
+                    tel_pros = c_n2.text_input("Teléfono (10)*", key=f"new_p_tel_{reset_id}", max_chars=10)
                     
                     servicios_p = pd.read_sql("SELECT * FROM servicios", conn); cats_p = servicios_p['categoria'].unique()
-                    cat_sel_p = st.selectbox("Categoría", cats_p, key="cat_pros_v41")
+                    cat_sel_p = st.selectbox("Categoría", cats_p, key=f"cat_pros_{reset_id}")
                     trats_filtrados_p = servicios_p[servicios_p['categoria'] == cat_sel_p]['nombre_tratamiento'].unique()
-                    trat_sel_p = st.selectbox("Tratamiento*", trats_filtrados_p, key="trat_pros_v41")
+                    trat_sel_p = st.selectbox("Tratamiento*", trats_filtrados_p, key=f"trat_pros_{reset_id}")
                     
                     dur_default_p = 30
                     if trat_sel_p:
@@ -917,14 +925,18 @@ def vista_consultorio():
                         if not row_dur_p.empty: dur_default_p = int(row_dur_p.iloc[0]['duracion'])
                     
                     c_tp1, c_tp2 = st.columns(2)
-                    duracion_cita_p = c_tp1.number_input("Minutos", value=dur_default_p, step=30, key="dur_pros_v41")
-                    hora_pros = c_tp2.selectbox("Hora Inicio", generar_slots_tiempo(), key="hora_pros_v41")
-                    doc_pros = st.selectbox("Doctor", LISTA_DOCTORES, key="doc_pros_v41")
+                    duracion_cita_p = c_tp1.number_input("Minutos", value=dur_default_p, step=30, key=f"dur_pros_{reset_id}")
+                    hora_pros = c_tp2.selectbox("Hora Inicio", generar_slots_tiempo(), key=f"hora_pros_{reset_id}")
+                    doc_pros = st.selectbox("Doctor", LISTA_DOCTORES, key=f"doc_pros_{reset_id}")
+                    
+                    # [V41 URGENCIA] Reimplementado visiblemente
+                    urgencia_p = st.checkbox("🚨 Es Urgencia / Sobrecupo", key=f"urg_pros_{reset_id}")
                     
                     if st.button("💾 Agendar Prospecto", use_container_width=True):
                         if nom_pros and len(tel_pros) == 10:
                              ocupado = verificar_disponibilidad(fecha_ver_str, hora_pros, duracion_cita_p)
-                             if ocupado: st.error("⚠️ Horario Ocupado")
+                             if ocupado and not urgencia_p: 
+                                 st.error("⚠️ Horario OCUPADO. Marque 'Urgencia' para empalmar.")
                              else:
                                  id_temp = f"PROS-{int(time.time())}"
                                  c = conn.cursor()
@@ -932,12 +944,8 @@ def vista_consultorio():
                                            (int(time.time()), fecha_ver_str, hora_pros, id_temp, formato_nombre_legal(nom_pros), "Primera Vez", trat_sel_p, doc_pros, "Pendiente", "Programada", f"Tel: {tel_pros}", duracion_cita_p))
                                  conn.commit()
                                  st.success("Prospecto Agendado")
-                                 
-                                 # [MEJORA] LIMPIEZA DE FORMULARIO PROSPECTO
-                                 keys_to_clear_p = ["new_p_nom_v41", "new_p_tel_v41", "cat_pros_v41", "trat_pros_v41", "dur_pros_v41", "hora_pros_v41", "doc_pros_v41"]
-                                 for k in keys_to_clear_p:
-                                     if k in st.session_state: del st.session_state[k]
-                                     
+                                 # [TRUCO MAESTRO] Reset
+                                 st.session_state.form_reset_id += 1
                                  time.sleep(1); st.rerun()
                         else: st.error("Datos incompletos.")
 
