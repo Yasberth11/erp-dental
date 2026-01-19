@@ -1090,8 +1090,7 @@ def vista_consultorio():
                         
                         hoy = datetime.now(TZ_MX).date(); df_raw_notas = pd.read_sql(f"SELECT fecha, tratamiento, notas FROM citas WHERE id_paciente='{id_sel_str}' ORDER BY timestamp DESC", conn); df_raw_notas['fecha_dt'] = pd.to_datetime(df_raw_notas['fecha'], format="%d/%m/%Y", errors='coerce').dt.date; hist_notas = df_raw_notas[df_raw_notas['fecha_dt'] <= hoy].drop(columns=['fecha_dt'])
                         if st.button("🖨️ Descargar Historia (PDF)"): 
-                            # 1. CONSULTA SQL AMPLIADA
-                            # Traemos todos los datos necesarios para filtrar
+                            # 1. CONSULTA SQL
                             query_historia = f"""
                                 SELECT fecha, tratamiento, notas, categoria, estatus_asistencia 
                                 FROM citas 
@@ -1100,37 +1099,36 @@ def vista_consultorio():
                             """
                             df_raw = pd.read_sql(query_historia, conn)
                             
-                            # 2. FILTRADO INTELIGENTE (MOTOR V47.4)
+                            # 2. FILTRADO INTELIGENTE (MOTOR V47.5 - FIX FECHAS)
                             if not df_raw.empty:
-                                # A) Normalización de fechas para evitar errores
+                                # A) Normalización de fechas
                                 df_raw['fecha_dt'] = pd.to_datetime(df_raw['fecha'], format="%d/%m/%Y", errors='coerce')
-                                hoy_dt = datetime.now(TZ_MX).replace(hour=0, minute=0, second=0, microsecond=0)
                                 
-                                # B) LISTA NEGRA DE PALABRAS (Términos prohibidos en Historia Clínica)
-                                # Si el tratamiento contiene alguna de estas, SE VA.
+                                # [FIX CRÍTICO] Usamos solo la FECHA (date) pura, eliminando horas y zonas horarias
+                                hoy_date = datetime.now(TZ_MX).date()
+                                
+                                # B) LISTA NEGRA
                                 palabras_prohibidas = ['ABONO', 'PAGO', 'MENSUALIDAD', 'ANTICIPO', 'DEUDA', 'SALDO', 'COTIZACION', 'PRESUPUESTO']
                                 pattern_prohibido = '|'.join(palabras_prohibidas)
                                 
                                 # --- APLICACIÓN DE REGLAS ---
-                                # Regla 1: No Financiero (Categoría)
                                 mask_cat = (df_raw['categoria'] != 'Financiero')
-                                # Regla 2: No Palabras Prohibidas (Blacklist)
                                 mask_txt = (~df_raw['tratamiento'].str.contains(pattern_prohibido, case=False, na=False))
-                                # Regla 3: Solo lo que ya pasó (Fecha <= Hoy)
-                                mask_time = (df_raw['fecha_dt'] <= hoy_dt)
-                                # Regla 4: Estatus Válido (Asistió o Terminado)
-                                # Nota: Si quieres ser flexible con citas viejas sin status, usa: .isin(['Asistió', None, ''])
+                                
+                                # [FIX] Comparación segura: Fecha pura vs Fecha pura (Evita TypeError)
+                                mask_time = (df_raw['fecha_dt'].dt.date <= hoy_date)
+                                
+                                # Regla 4: Estatus Válido
                                 mask_status = (df_raw['estatus_asistencia'] == 'Asistió')
 
                                 # Filtrado Final
                                 df_clean = df_raw[mask_cat & mask_txt & mask_time & mask_status].copy()
                                 
-                                # C) LIMPIEZA VISUAL (ADIÓS HUECOS BLANCOS)
-                                # Si la nota está vacía, ponemos un texto por defecto profesional
+                                # C) LIMPIEZA VISUAL
                                 df_clean['notas'] = df_clean['notas'].fillna("Procedimiento realizado sin incidencias.")
                                 df_clean.loc[df_clean['notas'] == "", 'notas'] = "Procedimiento realizado sin incidencias."
                                 
-                                # Selección de columnas para el PDF
+                                # Selección de columnas
                                 hist_notas_final = df_clean[['fecha', 'tratamiento', 'notas']]
                             else:
                                 hist_notas_final = pd.DataFrame(columns=['fecha', 'tratamiento', 'notas'])
