@@ -402,9 +402,9 @@ class PDFGenerator(FPDF):
             except: pass
         
         # [V41.0] LOGO UNAM
-        if os.path.exists(LOGO_UNAM):
-            try: self.image(LOGO_UNAM, 170, 8, 25) # Logo UNAM
-            except: pass
+        #if os.path.exists(LOGO_UNAM):
+        #    try: self.image(LOGO_UNAM, 170, 8, 25) # Logo UNAM
+        #    except: pass
 
         self.set_font('Arial', 'B', 14); self.set_text_color(0, 43, 91)
         self.cell(0, 10, 'ROYAL DENTAL', 0, 1, 'C'); self.ln(1)
@@ -1090,9 +1090,39 @@ def vista_consultorio():
                         
                         hoy = datetime.now(TZ_MX).date(); df_raw_notas = pd.read_sql(f"SELECT fecha, tratamiento, notas FROM citas WHERE id_paciente='{id_sel_str}' ORDER BY timestamp DESC", conn); df_raw_notas['fecha_dt'] = pd.to_datetime(df_raw_notas['fecha'], format="%d/%m/%Y", errors='coerce').dt.date; hist_notas = df_raw_notas[df_raw_notas['fecha_dt'] <= hoy].drop(columns=['fecha_dt'])
                         if st.button("🖨️ Descargar Historia (PDF)"): 
-                            pdf_bytes = crear_pdf_historia(p_data, hist_notas)
-                            clean_name = f"{p_data['id_paciente']}_HISTORIAL.pdf"
-                            st.download_button("📥 Bajar PDF", pdf_bytes, clean_name, "application/pdf")
+                            # [V47.2] FILTRO DE PUREZA CLÍNICA (NOM-004)
+                            # 1. Recuperamos datos con columnas extra para filtrar
+                            query_historia = f"""
+                                SELECT fecha, tratamiento, notas, categoria, estatus_asistencia 
+                                FROM citas 
+                                WHERE id_paciente='{id_sel_str}' 
+                                ORDER BY timestamp DESC
+                            """
+                            df_raw_notas = pd.read_sql(query_historia, conn)
+                            
+                            # 2. Aplicamos filtros legales
+                            # A) Filtro Financiero: Excluir cobros, abonos y deudas
+                            filtro_no_dinero = (df_raw_notas['categoria'] != 'Financiero') & \
+                                               (~df_raw_notas['tratamiento'].str.contains("ABONO", case=False, na=False))
+                            
+                            # B) Filtro de Realidad: Solo procedimientos donde el paciente ASISTIÓ
+                            filtro_asistencia = (df_raw_notas['estatus_asistencia'] == 'Asistió')
+                            
+                            # Aplicar y limpiar columnas
+                            hist_notas_limpia = df_raw_notas[filtro_no_dinero & filtro_asistencia].copy()
+                            hist_notas_limpia = hist_notas_limpia[['fecha', 'tratamiento', 'notas']] # Solo columnas clínicas
+                            
+                            # 3. Generar PDF Blindado
+                            # NOTA: Si tu función crear_pdf_historia solo acepta 2 argumentos, borra ", odo_data"
+                            try:
+                                odo_data = obtener_estado_dientes(id_sel_str)
+                                pdf_bytes = crear_pdf_historia(p_data, hist_notas_limpia, odo_data)
+                            except TypeError:
+                                # Fallback por si tienes la versión anterior de la función
+                                pdf_bytes = crear_pdf_historia(p_data, hist_notas_limpia)
+                                
+                            clean_name = f"{p_data['id_paciente']}_HISTORIAL_LEGAL.pdf"
+                            st.download_button("📥 Bajar PDF Legal", pdf_bytes, clean_name, "application/pdf")
                     
                     with c_hist:
                         st.markdown("#### 📜 Notas Clínicas")
