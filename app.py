@@ -1291,168 +1291,145 @@ def vista_consultorio():
             else: st.info("Seleccione un paciente para comenzar.")
 
     elif menu == "3. Planes de Tratamiento":
-        st.title("💰 Finanzas y Tratamientos")
-        pacientes = pd.read_sql("SELECT * FROM pacientes", conn)
-        servicios = pd.read_sql("SELECT * FROM servicios", conn)
+        st.title("💰 Finanzas")
+        pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         
         if not pacientes.empty:
-            # Selector de Paciente
-            lista_pacientes = pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
-            sel = st.selectbox("Seleccionar Paciente:", lista_pacientes)
+            sel = st.selectbox("Paciente:", pacientes.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
+            id_p = sel.split(" - ")[0]; nom_p = sel.split(" - ")[1]; st.session_state.id_paciente_activo = id_p
             
-            if sel:
-                id_p = sel.split(" - ")[0]
-                nom_p = sel.split(" - ")[1]
-                st.session_state.id_paciente_activo = id_p
-                
-                # --- [NUEVO] MÓDULO DE INTELIGENCIA FINANCIERA & OBSERVACIONES ---
-                st.markdown("---")
-                
-                # 1. Cálculo de Deuda en Tiempo Real
-                deuda_total = pd.read_sql(f"SELECT SUM(saldo_pendiente) FROM citas WHERE id_paciente='{id_p}' AND estado_pago != 'CANCELADO'", conn).iloc[0,0]
-                if deuda_total is None: deuda_total = 0.0
-                
-                # 2. Semáforo Financiero Profesional
-                col_status, col_obs = st.columns([1, 2])
-                
-                with col_status:
-                    if deuda_total > 0:
-                        st.error(f"⚠️ **SALDO PENDIENTE**\n\nEl paciente presenta un adeudo acumulado de: **${deuda_total:,.2f}**")
-                    else:
-                        st.success("🎉 **CUENTA AL CORRIENTE**\n\nEl paciente no presenta adeudos pendientes.")
-                
-                with col_obs:
-                    # 3. Cajón de Observaciones Administrativas (Persistente del Paciente)
-                    # Recuperamos la nota actual de la base de datos
-                    p_actual = pacientes[pacientes['id_paciente'] == id_p].iloc[0]
-                    nota_actual = p_actual.get('nota_administrativa', '')
-                    if nota_actual is None: nota_actual = ""
+            # --- SEMÁFORO FINANCIERO PROFESIONAL ---
+            st.markdown(f"### 🚦 Estado de Cuenta: {nom_p}")
+            
+            # Calcular deuda real
+            deuda_total = pd.read_sql(f"SELECT SUM(saldo_pendiente) FROM citas WHERE id_paciente='{id_p}' AND estado_pago != 'CANCELADO'", conn).iloc[0,0]
+            if deuda_total is None: deuda_total = 0.0
+            
+            # Semáforo
+            if deuda_total > 0:
+                st.error(f"⚠️ **SALDO PENDIENTE:** El paciente presenta un adeudo acumulado de **${deuda_total:,.2f}**. Se sugiere regularizar pagos.")
+            else:
+                st.success("🎉 **CUENTA AL CORRIENTE:** El paciente no tiene adeudos pendientes.")
+            
+            # --- CAJÓN DE OBSERVACIONES ADMINISTRATIVAS (PERSISTENTE) ---
+            # Recuperamos la nota actual de la base de datos
+            p_actual = pacientes[pacientes['id_paciente'] == id_p].iloc[0]
+            nota_actual = p_actual.get('nota_administrativa', '')
+            if nota_actual is None: nota_actual = ""
+            
+            with st.expander("📋 Observaciones Administrativas (Bitácora)", expanded=bool(nota_actual)):
+                with st.form("form_nota_admin_finanzas"):
+                    obs_admin_persistent = st.text_area("Notas internas sobre el paciente:", 
+                                           value=nota_actual, 
+                                           height=80,
+                                           placeholder="Ej: Paciente VIP, requiere factura siempre, suele llegar tarde...")
+                    if st.form_submit_button("💾 Actualizar Observaciones"):
+                        c = conn.cursor()
+                        c.execute("UPDATE pacientes SET nota_administrativa = ? WHERE id_paciente = ?", (obs_admin_persistent, id_p))
+                        conn.commit()
+                        st.success("Observaciones actualizadas.")
+                        time.sleep(0.5); st.rerun()
+            # ------------------------------------------------
+
+            tab_cobro, tab_abono = st.tabs(["🆕 Nuevo Plan / Tratamiento", "💳 Abonar a Deuda"])
+            
+            with tab_cobro:
+                with st.container(border=True):
+                    col_up1, col_up2, col_up3 = st.columns(3)
+                    if not servicios.empty:
+                        cat_sel = col_up1.selectbox("Categoría", servicios['categoria'].unique()); filt = servicios[servicios['categoria'] == cat_sel]
+                        trat_sel = col_up2.selectbox("Tratamiento", filt['nombre_tratamiento'].unique())
+                        item = filt[filt['nombre_tratamiento'] == trat_sel].iloc[0]; precio_sug = float(item['precio_lista']); costo_lab = float(item['costo_laboratorio_base'])
+                    else: cat_sel = "Manual"; trat_sel = col_up2.text_input("Tratamiento"); precio_sug = 0.0; costo_lab = 0.0
+                    doc_name = col_up3.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
                     
-                    with st.form("form_nota_admin"):
-                        obs_admin = st.text_area("📋 Bitácora Administrativa (Visible solo internamente)", 
-                                               value=nota_actual, 
-                                               height=100,
-                                               placeholder="Ej: Paciente requiere factura, Adelantó pago, Preferencia de horario...")
-                        if st.form_submit_button("💾 Actualizar Bitácora"):
-                            c = conn.cursor()
-                            c.execute("UPDATE pacientes SET nota_administrativa = ? WHERE id_paciente = ?", (obs_admin, id_p))
-                            conn.commit()
-                            st.success("Bitácora actualizada.")
-                            time.sleep(1); st.rerun()
-
-                st.markdown("---")
-                # ---------------------------------------------------------------
-
-                # PESTAÑAS DE OPERACIÓN (Funcionalidad V41 Mejorada)
-                tab_cobro, tab_abono = st.tabs(["🆕 Nuevo Plan / Tratamiento", "💳 Abonar a Deuda"])
-                
-                with tab_cobro:
-                    with st.container(border=True):
-                        col_up1, col_up2, col_up3 = st.columns(3)
-                        if not servicios.empty:
-                            cat_sel = col_up1.selectbox("Categoría", servicios['categoria'].unique())
-                            filt = servicios[servicios['categoria'] == cat_sel]
-                            trat_sel = col_up2.selectbox("Tratamiento", filt['nombre_tratamiento'].unique())
-                            # Auto-llenado de precios
-                            item = filt[filt['nombre_tratamiento'] == trat_sel].iloc[0]
-                            precio_sug = float(item['precio_lista'])
-                            costo_lab = float(item['costo_laboratorio_base'])
-                        else: 
-                            cat_sel = "Manual"; trat_sel = col_up2.text_input("Tratamiento"); precio_sug = 0.0; costo_lab = 0.0
+                    with st.form("cobro", clear_on_submit=True):
+                        c1, c2, c3 = st.columns(3); precio = c1.number_input("Precio", value=precio_sug, step=50.0); abono = c2.number_input("Abono", step=50.0); saldo = precio - abono; c3.metric("Saldo", f"${saldo:,.2f}")
+                        c4, c5, c6 = st.columns([1.5, 1, 1]); metodo = c4.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia", "Garantía", "Pendiente de Pago"]); num_sessions = c5.number_input("Sesiones", min_value=1, value=1); agendar = c6.checkbox("¿Agendar Cita?")
                         
-                        doc_name = col_up3.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
+                        if agendar: 
+                            c7, c8 = st.columns(2); f_cita = c7.date_input("Fecha Cita", datetime.now(TZ_MX)); h_cita = c8.selectbox("Hora Cita", generar_slots_tiempo())
+                        else: f_cita = datetime.now(TZ_MX); h_cita = "00:00"
                         
-                        with st.form("cobro", clear_on_submit=True):
-                            st.caption("Detalles Económicos")
-                            c1, c2, c3 = st.columns(3)
-                            precio = c1.number_input("Precio Final", value=precio_sug, step=50.0)
-                            abono = c2.number_input("Abono Inicial", step=50.0)
-                            saldo = precio - abono
-                            c3.metric("Saldo Restante", f"${saldo:,.2f}")
+                        st.markdown("---")
+                        # SEPARACIÓN DE NOTAS
+                        col_nota1, col_nota2 = st.columns(2)
+                        with col_nota1:
+                            notas = st.text_area("📝 Nota de Evolución (Clínico - PDF)", height=80, placeholder="Procedimiento realizado...")
+                        with col_nota2:
+                            obs_admin = st.text_area("👁️ Observación Transacción (Interno)", height=80, placeholder="Ej: Pago parcial autorizado...")
+
+                        if st.form_submit_button("Registrar Cobro/Tratamiento"):
+                            if not notas.strip(): st.warning("⚠️ Guardando sin nota clínica.")
+                            if metodo == "Garantía": abono = 0; saldo = 0; precio = 0 
+                            estatus = "Pagado" if saldo <= 0 else "Pendiente"; c = conn.cursor()
                             
-                            c4, c5, c6 = st.columns([1.5, 1, 1])
-                            metodo = c4.selectbox("Método de Pago", ["Efectivo", "Tarjeta", "Transferencia", "Garantía", "Pendiente de Pago"])
-                            num_sessions = c5.number_input("Sesiones Estimadas", min_value=1, value=1)
-                            agendar = c6.checkbox("¿Agendar Próxima Cita?")
+                            nota_final = formato_oracion(notas)
+                            obs_final = formato_oracion(obs_admin)
                             
-                            # Configuración de Cita Futura
+                            c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, observaciones, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
+                                      (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, obs_final, abono, saldo, get_fecha_mx(), costo_lab))
+                            
                             if agendar: 
-                                st.info("📅 Configuración de Cita")
-                                c7, c8 = st.columns(2)
-                                f_cita = c7.date_input("Fecha Cita", datetime.now(TZ_MX))
-                                h_cita = c8.selectbox("Hora Cita", generar_slots_tiempo())
-                            else: 
-                                f_cita = datetime.now(TZ_MX); h_cita = "00:00"
+                                c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, estado_pago, categoria, estatus_asistencia, notas) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''', 
+                                          (int(time.time())+1, format_date_latino(f_cita), h_cita, id_p, nom_p, "Tratamiento", trat_sel, doc_name, "Pendiente", cat_sel, "Programada", f"Cita agendada. Obs: {obs_final}"))
                             
-                            st.markdown("---")
-                            # [MEJORA] SEPARACIÓN DE NOTAS (CLÍNICA vs ADMIN)
-                            cn1, cn2 = st.columns(2)
-                            notas = cn1.text_area("📝 Nota de Evolución (Expediente Clínico)", height=80, placeholder="Detalles médicos del procedimiento...")
-                            obs_transaccion = cn2.text_area("👁️ Observación de Transacción (Interno)", height=80, placeholder="Ej: Dejó pendiente $200 para mañana...")
+                            conn.commit(); st.success("Registrado correctamente"); time.sleep(1); st.rerun()
 
-                            if st.form_submit_button("💾 Registrar Tratamiento"):
-                                if not notas.strip(): st.warning("⚠️ Guardando sin nota clínica.")
-                                
-                                if metodo == "Garantía": abono = 0; saldo = 0; precio = 0 
-                                estatus = "Pagado" if saldo <= 0 else "Pendiente"
-                                c = conn.cursor()
-                                nota_final = formato_oracion(notas)
-                                obs_final = formato_oracion(obs_transaccion)
-                                
-                                # Guardamos Cita/Cobro con AMBOS campos de notas
+            with tab_abono:
+                 with st.container(border=True):
+                    deudas = pd.read_sql(f"SELECT rowid, fecha, tratamiento, saldo_pendiente FROM citas WHERE id_paciente='{id_p}' AND saldo_pendiente > 0 AND estado_pago != 'CANCELADO'", conn)
+                    if not deudas.empty:
+                        lista_deudas = deudas.apply(lambda x: f"ID: {x['rowid']} | {x['fecha']} | {x['tratamiento']} | Resta: ${x['saldo_pendiente']}", axis=1).tolist()
+                        deuda_sel = st.selectbox("Seleccionar Cuenta por Cobrar:", lista_deudas)
+                        if deuda_sel:
+                            id_row_target = int(deuda_sel.split(" | ")[0].replace("ID: ", "")); row_deuda = deudas[deudas['rowid'] == id_row_target].iloc[0]; saldo_actual = row_deuda['saldo_pendiente']
+                            st.info(f"Abonando a: **{row_deuda['tratamiento']}** ({row_deuda['fecha']})")
+                            col_ab1, col_ab2 = st.columns(2); monto_abono = col_ab1.number_input("Monto a Abonar", min_value=0.0, max_value=float(saldo_actual), step=50.0); metodo_abono = col_ab2.selectbox("Forma de Pago", ["Efectivo", "Tarjeta", "Transferencia"])
+                            nuevo_saldo = saldo_actual - monto_abono; st.metric("Nuevo Saldo Restante", f"${nuevo_saldo:,.2f}")
+                            if st.button("✅ Registrar Abono"):
+                                c = conn.cursor(); nuevo_estado = "Pagado" if nuevo_saldo <= 0 else "Pendiente"
+                                c.execute("UPDATE citas SET saldo_pendiente = ?, estado_pago = ? WHERE rowid = ?", (nuevo_saldo, nuevo_estado, id_row_target))
+                                texto_concepto = f"ABONO A: {row_deuda['tratamiento']}"
                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, observaciones, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
-                                          (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, obs_final, abono, saldo, get_fecha_mx(), costo_lab))
-                                
-                                # Agendar Cita Futura si se solicitó
-                                if agendar: 
-                                    c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, estado_pago, categoria, estatus_asistencia, notas) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''', 
-                                              (int(time.time())+1, format_date_latino(f_cita), h_cita, id_p, nom_p, "Tratamiento", trat_sel, doc_name, "Pendiente", cat_sel, "Programada", f"Cita agendada: {trat_sel}"))
-                                
-                                conn.commit(); st.success("Registrado exitosamente"); time.sleep(1); st.rerun()
+                                          (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, "Financiero", texto_concepto, "Caja", 0, 0, 0, metodo_abono, "Pagado", "", "Abono registrado", monto_abono, 0, get_fecha_mx(), 0))
+                                conn.commit(); st.success("Abono registrado correctamente"); time.sleep(1.5); st.rerun()
+                    else: st.success("🎉 Este paciente no tiene adeudos pendientes.")
 
-                with tab_abono:
-                     with st.container(border=True):
-                        deudas = pd.read_sql(f"SELECT rowid, fecha, tratamiento, saldo_pendiente FROM citas WHERE id_paciente='{id_p}' AND saldo_pendiente > 0 AND estado_pago != 'CANCELADO'", conn)
-                        if not deudas.empty:
-                            lista_deudas = deudas.apply(lambda x: f"ID: {x['rowid']} | {x['fecha']} | {x['tratamiento']} | Resta: ${x['saldo_pendiente']}", axis=1).tolist()
-                            deuda_sel = st.selectbox("Seleccionar Cuenta por Cobrar:", lista_deudas)
-                            if deuda_sel:
-                                id_row_target = int(deuda_sel.split(" | ")[0].replace("ID: ", ""))
-                                row_deuda = deudas[deudas['rowid'] == id_row_target].iloc[0]
-                                saldo_actual = row_deuda['saldo_pendiente']
-                                
-                                st.info(f"Abonando a: **{row_deuda['tratamiento']}** ({row_deuda['fecha']})")
-                                col_ab1, col_ab2 = st.columns(2)
-                                monto_abono = col_ab1.number_input("Monto a Abonar", min_value=0.0, max_value=float(saldo_actual), step=50.0)
-                                metodo_abono = col_ab2.selectbox("Forma de Pago", ["Efectivo", "Tarjeta", "Transferencia"])
-                                
-                                nuevo_saldo = saldo_actual - monto_abono
-                                st.metric("Nuevo Saldo Restante", f"${nuevo_saldo:,.2f}")
-                                
-                                if st.button("✅ Registrar Abono"):
-                                    c = conn.cursor()
-                                    nuevo_estado = "Pagado" if nuevo_saldo <= 0 else "Pendiente"
-                                    c.execute("UPDATE citas SET saldo_pendiente = ?, estado_pago = ? WHERE rowid = ?", (nuevo_saldo, nuevo_estado, id_row_target))
-                                    
-                                    # Registro del movimiento financiero
-                                    texto_concepto = f"ABONO A: {row_deuda['tratamiento']}"
-                                    c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio, observaciones) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
-                                              (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, "Financiero", texto_concepto, "Caja", 0, 0, 0, metodo_abono, "Pagado", "Abono a deuda histórica", "", monto_abono, 0, get_fecha_mx(), 0, "Registro automático de abono"))
-                                    
-                                    conn.commit(); st.success("Abono registrado"); time.sleep(1.5); st.rerun()
-                        else: st.success("🎉 Este paciente no tiene adeudos pendientes.")
-
-            # Tabla Historial (Igual que V41 pero robusta)
             st.divider()
             with st.container(border=True):
                 st.markdown("#### 📊 Historial de Movimientos")
-                df_f = pd.read_sql(f"SELECT rowid, fecha, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, metodo_pago FROM citas WHERE id_paciente='{st.session_state.id_paciente_activo}' AND estado_pago != 'CANCELADO' AND (precio_final > 0 OR monto_pagado > 0) ORDER BY timestamp DESC", conn)
+                df_f = pd.read_sql(f"SELECT rowid, fecha, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, metodo_pago FROM citas WHERE id_paciente='{id_p}' AND estado_pago != 'CANCELADO' AND (precio_final > 0 OR monto_pagado > 0) ORDER BY timestamp DESC", conn)
+                
                 if not df_f.empty:
+                    # [CORRECCIÓN CVO V48.2]
+                    # 1. Seleccionamos columnas y reseteamos el índice
                     df_show = df_f[['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente', 'metodo_pago']].reset_index(drop=True)
-                    df_show.columns = ['FECHA', 'CONCEPTO', 'CARGO', 'ABONO', 'SALDO', 'MÉTODO']
-                    st.dataframe(df_show, use_container_width=True)
-                else:
-                    st.info("Sin movimientos registrados.")
+                    
+                    # 2. Creamos el índice CVO iniciando en 1
+                    df_show.index = np.arange(1, len(df_show) + 1)
+                    
+                    # 3. Lo convertimos en columna para que Streamlit lo muestre con nombre
+                    df_show = df_show.reset_index()
+                    df_show.columns = ['CVO', 'FECHA', 'CONCEPTO', 'CARGO ($)', 'ABONO ($)', 'SALDO ($)', 'MÉTODO']
+                    
+                    # 4. Mostramos ocultando el índice por defecto de pandas (para que solo salga CVO)
+                    st.dataframe(df_show, use_container_width=True, hide_index=True)
+                    
+                    # Generación de Recibos (Mantenido)
+                    st.caption("🖨️ Generar Recibo de Pago")
+                    opciones_recibo = df_f.apply(lambda x: f"{x['fecha']} | {x['tratamiento']} | Abono: ${x['monto_pagado']} ({x['metodo_pago']})", axis=1).tolist(); sel_recibo = st.selectbox("Seleccionar Movimiento:", opciones_recibo)
+                    if st.button("Descargar Recibo Seleccionado"):
+                        index_sel = opciones_recibo.index(sel_recibo); row_sel = df_f.iloc[index_sel]; p_info = pacientes[pacientes['id_paciente'] == id_p].iloc[0]
+                        fecha_corte = row_sel['fecha']
+                        items_hoy = df_f[df_f['fecha'] == fecha_corte].to_dict('records')
+                        items_deuda = df_f[(df_f['saldo_pendiente'] > 0) & (df_f['fecha'] != fecha_corte)].to_dict('records')
+                        total_tratamiento_hoy = sum(item['precio_final'] for item in items_hoy)
+                        total_pagado_hoy = sum(item['monto_pagado'] for item in items_hoy)
+                        saldo_total_global = df_f['saldo_pendiente'].sum()
+                        datos_pdf = { "paciente": f"{p_info['nombre']} {p_info['apellido_paterno']} {p_info['apellido_materno']}", "rfc": p_info.get('rfc', 'XAXX010101000'), "folio": f"RD-{int(time.time())}-{row_sel['rowid']}", "fecha": fecha_corte, "items_hoy": items_hoy, "items_deuda": items_deuda, "total_tratamiento_hoy": total_tratamiento_hoy, "total_pagado_hoy": total_pagado_hoy, "saldo_total_global": saldo_total_global }
+                        pdf_bytes = crear_recibo_pago(datos_pdf); clean_name = f"RECIBO_{datos_pdf['folio']}.pdf"; st.download_button("📥 Bajar PDF", pdf_bytes, clean_name, "application/pdf")
+                else: st.info("No hay movimientos financieros registrados.")
 
     elif menu == "5. Documentos & Firmas":
         st.title("⚖️ Centro Legal"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
