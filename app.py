@@ -1090,57 +1090,43 @@ def vista_consultorio():
                         
                         hoy = datetime.now(TZ_MX).date(); df_raw_notas = pd.read_sql(f"SELECT fecha, tratamiento, notas FROM citas WHERE id_paciente='{id_sel_str}' ORDER BY timestamp DESC", conn); df_raw_notas['fecha_dt'] = pd.to_datetime(df_raw_notas['fecha'], format="%d/%m/%Y", errors='coerce').dt.date; hist_notas = df_raw_notas[df_raw_notas['fecha_dt'] <= hoy].drop(columns=['fecha_dt'])
                         if st.button("🖨️ Descargar Historia (PDF)"): 
-                            # 1. CONSULTA SQL AMPLIADA
-                            # Traemos todos los datos necesarios para filtrar
+                            # 1. Recuperamos datos
                             query_historia = f"""
                                 SELECT fecha, tratamiento, notas, categoria, estatus_asistencia 
                                 FROM citas 
                                 WHERE id_paciente='{id_sel_str}' 
                                 ORDER BY timestamp DESC
                             """
-                            df_raw = pd.read_sql(query_historia, conn)
+                            df_raw_notas = pd.read_sql(query_historia, conn)
                             
-                            # 2. FILTRADO INTELIGENTE (MOTOR V47.4)
-                            if not df_raw.empty:
-                                # A) Normalización de fechas para evitar errores
-                                df_raw['fecha_dt'] = pd.to_datetime(df_raw['fecha'], format="%d/%m/%Y", errors='coerce')
-                                hoy_dt = datetime.now(TZ_MX).replace(hour=0, minute=0, second=0, microsecond=0)
-                                
-                                # B) LISTA NEGRA DE PALABRAS (Términos prohibidos en Historia Clínica)
-                                # Si el tratamiento contiene alguna de estas, SE VA.
-                                palabras_prohibidas = ['ABONO', 'PAGO', 'MENSUALIDAD', 'ANTICIPO', 'DEUDA', 'SALDO', 'COTIZACION', 'PRESUPUESTO']
-                                pattern_prohibido = '|'.join(palabras_prohibidas)
-                                
-                                # --- APLICACIÓN DE REGLAS ---
-                                # Regla 1: No Financiero (Categoría)
-                                mask_cat = (df_raw['categoria'] != 'Financiero')
-                                # Regla 2: No Palabras Prohibidas (Blacklist)
-                                mask_txt = (~df_raw['tratamiento'].str.contains(pattern_prohibido, case=False, na=False))
-                                # Regla 3: Solo lo que ya pasó (Fecha <= Hoy)
-                                mask_time = (df_raw['fecha_dt'] <= hoy_dt)
-                                # Regla 4: Estatus Válido (Asistió o Terminado)
-                                # Nota: Si quieres ser flexible con citas viejas sin status, usa: .isin(['Asistió', None, ''])
-                                mask_status = (df_raw['estatus_asistencia'] == 'Asistió')
+                            # 2. FILTRO DE PUREZA CLÍNICA (CORREGIDO / MÁS FLEXIBLE)
+                            
+                            # A) Filtro Financiero: (Esto se mantiene estricto)
+                            # Excluye Categoría 'Financiero' Y cualquier tratamiento que diga "ABONO"
+                            filtro_no_dinero = (df_raw_notas['categoria'] != 'Financiero') & \
+                                               (~df_raw_notas['tratamiento'].str.contains("ABONO", case=False, na=False))
+                            
+                            # B) Filtro de Visibilidad (Ajustado para datos históricos):
+                            # Muestra TODO excepto lo que esté explícitamente Cancelado o Faltó.
+                            # Esto permite ver citas "Programadas" o antiguas sin estatus.
+                            filtro_estado = (~df_raw_notas['estatus_asistencia'].isin(['Canceló', 'No Asistió', 'CANCELADO']))
+                            
+                            # C) Filtro de Contenido (Opcional): 
+                            # Asegura que al menos haya un tratamiento o una nota que mostrar
+                            filtro_contenido = (df_raw_notas['tratamiento'] != '') | (df_raw_notas['notas'] != '')
 
-                                # Filtrado Final
-                                df_clean = df_raw[mask_cat & mask_txt & mask_time & mask_status].copy()
-                                
-                                # C) LIMPIEZA VISUAL (ADIÓS HUECOS BLANCOS)
-                                # Si la nota está vacía, ponemos un texto por defecto profesional
-                                df_clean['notas'] = df_clean['notas'].fillna("Procedimiento realizado sin incidencias.")
-                                df_clean.loc[df_clean['notas'] == "", 'notas'] = "Procedimiento realizado sin incidencias."
-                                
-                                # Selección de columnas para el PDF
-                                hist_notas_final = df_clean[['fecha', 'tratamiento', 'notas']]
-                            else:
-                                hist_notas_final = pd.DataFrame(columns=['fecha', 'tratamiento', 'notas'])
-
-                            # 3. GENERACIÓN DEL PDF
+                            # Aplicar filtros conjuntos
+                            hist_notas_limpia = df_raw_notas[filtro_no_dinero & filtro_estado & filtro_contenido].copy()
+                            
+                            # Limpieza de columnas para el PDF
+                            hist_notas_limpia = hist_notas_limpia[['fecha', 'tratamiento', 'notas']]
+                            
+                            # 3. Generar PDF
                             try:
                                 odo_data = obtener_estado_dientes(id_sel_str)
-                                pdf_bytes = crear_pdf_historia(p_data, hist_notas_final, odo_data)
+                                pdf_bytes = crear_pdf_historia(p_data, hist_notas_limpia, odo_data)
                             except TypeError:
-                                pdf_bytes = crear_pdf_historia(p_data, hist_notas_final)
+                                pdf_bytes = crear_pdf_historia(p_data, hist_notas_limpia)
                                 
                             clean_name = f"{p_data['id_paciente']}_HISTORIAL_LEGAL.pdf"
                             st.download_button("📥 Bajar PDF Legal", pdf_bytes, clean_name, "application/pdf")
