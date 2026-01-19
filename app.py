@@ -81,7 +81,7 @@ st.markdown("""
     .stButton>button { background-color: #D4AF37; color: #002B5B; border: none; font-weight: bold; width: 100%; transition: all 0.3s; }
     .stButton>button:hover { background-color: #B5952F; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
     input[type=number] { text-align: right; }
-    div[data-testid="column"] { display: flex; flex-direction: column; justify-content: flex-end; }
+    div[data-testid="column"] { display: flex; flex-direction: column; justify-content: flex-start; }
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
