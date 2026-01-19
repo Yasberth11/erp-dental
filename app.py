@@ -1432,7 +1432,7 @@ def vista_consultorio():
                         pdf_bytes = crear_recibo_pago(datos_pdf); clean_name = f"RECIBO_{datos_pdf['folio']}.pdf"; st.download_button("📥 Bajar PDF", pdf_bytes, clean_name, "application/pdf")
                 else: st.info("No hay movimientos financieros registrados.")
 
-   elif menu == "5. Consentimientos":
+     elif menu == "5. Consentimientos":
         st.title("✒️ Autorización de Tratamientos")
         
         # Carga de pacientes
@@ -1598,4 +1598,4 @@ def vista_consultorio():
                         st.warning("🔒 **ÁREA DE FIRMA BLOQUEADA:** Para proceder, el paciente debe leer el texto superior y marcar la casilla de aceptación.")
                 
                 else:
-                    st.warning("⚠️ No se requiere documento legal para este concepto.")
+                    st.warning("⚠️ No se requiere documento legal para este concepto.")  
