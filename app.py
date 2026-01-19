@@ -1434,31 +1434,25 @@ def vista_consultorio():
 
     elif menu == "5. Consentimientos":
         st.title("✒️ Autorización de Tratamientos")
-        
-        # Carga de pacientes
         df_p = pd.read_sql("SELECT * FROM pacientes", conn)
         
         if not df_p.empty:
-            # Selector de Paciente
-            lista_pacs = df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()
-            sel = st.selectbox("Paciente:", ["..."] + lista_pacs)
+            sel = st.selectbox("Paciente:", ["..."] + df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist())
             
             if sel != "...":
-                # Recuperación de datos del paciente seleccionado
                 id_target = sel.split(" - ")[0]
                 p_obj = df_p[df_p['id_paciente'] == id_target].iloc[0]
                 st.session_state.id_paciente_activo = id_target
                 
-                # Configuración del documento
                 tipo_doc = st.selectbox("Documento", ["Consentimiento Informado", "Aviso de Privacidad"])
-                
-                # Variables por defecto
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK"
-                t1_name = ""; t2_name = ""; img_t1 = None; img_t2 = None
+                t1_name = ""
+                t2_name = ""
+                img_t1 = None
+                img_t2 = None
                 
-                # Lógica para Consentimiento (Busca tratamientos de HOY)
                 if "Consentimiento" in tipo_doc:
                     hoy_str = get_fecha_mx()
                     citas_hoy = pd.read_sql(f"SELECT * FROM citas WHERE id_paciente='{id_target}' AND fecha='{hoy_str}' AND (precio_final > 0 OR monto_pagado > 0)", conn)
@@ -1468,7 +1462,6 @@ def vista_consultorio():
                         tratamiento_legal = ", ".join(lista_tratamientos)
                         riesgo_legal = ""
                         nivel_riesgo = "LOW_RISK"
-                        
                         servicios = pd.read_sql("SELECT * FROM servicios", conn)
                         
                         for trat in lista_tratamientos:
@@ -1481,121 +1474,117 @@ def vista_consultorio():
                                 if not row_s.empty and row_s.iloc[0]['consent_level'] == 'HIGH_RISK': 
                                     nivel_riesgo = 'HIGH_RISK'
                         
-                        # Feedback Visual
                         st.info(f"📋 Procedimientos de hoy: {tratamiento_legal}")
                         if nivel_riesgo == 'HIGH_RISK': 
                             st.error("🔴 ALTO RIESGO DETECTADO: Se requieren testigos.")
                         else: 
                             st.success("🟢 BAJO RIESGO: Solo Doctor y Paciente.")
-                    else:
-                        st.warning("⚠️ No hay tratamientos registrados HOY para este paciente (Debe haber un cobro registrado).")
-                        st.stop() # Detiene la ejecución si no hay datos
+                    else: 
+                        st.warning("⚠️ No hay tratamientos registrados HOY.")
+                        st.stop()
                 
-                # Selección del Doctor
                 col_doc_sel = st.columns(2)
                 doc_name_sel = col_doc_sel[0].selectbox("Odontólogo Tratante:", LISTA_DOCTORES)
                 
-                # --- AQUÍ EMPIEZA LA LÓGICA DEL CANDADO Y FIRMAS (CORREGIDO) ---
                 if nivel_riesgo != 'NO_CONSENT':
-                    st.markdown("---")
-                    st.subheader("📜 Lectura del Documento (Validación Legal)")
+                    st.markdown("### Firmas Digitales")
+                    col_firmas_1, col_firmas_2 = st.columns(2)
                     
-                    # 1. PREPARACIÓN DEL TEXTO PREVIO
-                    if "Consentimiento" in tipo_doc:
-                        texto_preview = f"""**PROCEDIMIENTO(S) A REALIZAR:**
-{tratamiento_legal}
-
-**RIESGOS Y COMPLICACIONES PREVISTOS:**
-{riesgo_legal if riesgo_legal else "Riesgos generales inherentes a la atención odontológica."}
-
-**DECLARACIÓN Y OBLIGACIÓN DE MEDIOS:**
-{CLAUSULA_CIERRE}"""
-                    else:
-                        texto_preview = f"""**AVISO DE PRIVACIDAD INTEGRAL**\nSe pone a disposición del titular el Aviso de Privacidad para garantizar el tratamiento legítimo, controlado e informado de sus datos personales sensibles, en cumplimiento con la LFPDPPP.\n\n{TXT_DATOS_SENSIBLES}"""
-
-                    # 2. CONTENEDOR DE LECTURA
-                    st.info(texto_preview)
+                    with col_firmas_1: 
+                        st.caption("Firma del Paciente")
+                        canvas_pac = st_canvas(stroke_width=2, height=150, width=300, drawing_mode="freedraw", key="firma_paciente")
                     
-                    # 3. CHECKBOX CANDADO
-                    aceptado = st.checkbox("✅ He leído la explicación anterior, aclararon mis dudas y acepto los riesgos descritos.", key="check_legal_ok")
-                    
-                    # 4. CONDICIONAL: SI ACEPTA -> MUESTRA FIRMAS
-                    if aceptado:
-                        st.markdown("### ✍️ Firmas Digitales")
-                        col_firmas_1, col_firmas_2 = st.columns(2)
+                    if "Aviso" not in tipo_doc:
+                        with col_firmas_2: 
+                            st.caption(f"Firma Dr. {doc_name_sel.split()[1]}")
+                            canvas_doc = st_canvas(stroke_width=2, height=150, width=300, drawing_mode="freedraw", key="firma_doctor")
                         
-                        with col_firmas_1: 
-                            st.caption("Firma del Paciente")
-                            canvas_pac = st_canvas(stroke_width=2, height=150, width=300, drawing_mode="freedraw", key="firma_paciente")
+                        if nivel_riesgo == 'HIGH_RISK':
+                            st.markdown("#### Testigos (Obligatorios)")
+                            c_t1, c_t2 = st.columns(2)
+                            with c_t1: 
+                                t1_name = st.text_input("Nombre Testigo 1")
+                                canvas_t1 = st_canvas(stroke_width=2, height=150, width=300, drawing_mode="freedraw", key="firma_testigo1")
+                            with c_t2: 
+                                t2_name = st.text_input("Nombre Testigo 2")
+                                canvas_t2 = st_canvas(stroke_width=2, height=150, width=300, drawing_mode="freedraw", key="firma_testigo2")
+                    
+                    if st.button("Generar PDF Legal"):
+                        bloqueo = False
+                        if "Consentimiento" in tipo_doc and nivel_riesgo == 'HIGH_RISK':
+                            if not (t1_name and t2_name): 
+                                st.error("⛔ ERROR LEGAL: Faltan nombres de testigos.")
+                                bloqueo = True
+                            if canvas_t1.image_data is None or canvas_t2.image_data is None: 
+                                st.error("⛔ ERROR: Faltan firmas de testigos.")
+                                bloqueo = True
                         
-                        if "Aviso" not in tipo_doc:
-                            with col_firmas_2: 
-                                st.caption(f"Firma Dr. {doc_name_sel.split()[1]}")
-                                canvas_doc = st_canvas(stroke_width=2, height=150, width=300, drawing_mode="freedraw", key="firma_doctor")
+                        if not bloqueo:
+                            img_pac = None
+                            img_doc = None
                             
-                            if nivel_riesgo == 'HIGH_RISK':
-                                st.markdown("#### Testigos (Obligatorios)")
-                                c_t1, c_t2 = st.columns(2) 
-                                with c_t1: 
-                                    t1_name = st.text_input("Nombre Testigo 1")
-                                    canvas_t1 = st_canvas(stroke_width=2, height=150, width=300, drawing_mode="freedraw", key="firma_testigo1")
-                                with c_t2: 
-                                    t2_name = st.text_input("Nombre Testigo 2")
-                                    canvas_t2 = st_canvas(stroke_width=2, height=150, width=300, drawing_mode="freedraw", key="firma_testigo2")
-                        
-                        # BOTÓN GENERAR PDF
-                        if st.button("Generar PDF Legal", type="primary"):
-                            bloqueo = False
-                            # Validaciones de Testigos
-                            if "Consentimiento" in tipo_doc and nivel_riesgo == 'HIGH_RISK':
-                                if not (t1_name and t2_name): 
-                                    st.error("⛔ ERROR LEGAL: Faltan nombres de testigos.")
-                                    bloqueo = True
-                                if canvas_t1.image_data is None or canvas_t2.image_data is None: 
-                                    st.error("⛔ ERROR: Faltan firmas de testigos.")
-                                    bloqueo = True
+                            if canvas_pac.image_data is not None:
+                                if not np.all(canvas_pac.image_data[:,:,3] == 0): 
+                                    img = Image.fromarray(canvas_pac.image_data.astype('uint8'), 'RGBA')
+                                    buf = io.BytesIO()
+                                    img.save(buf, format="PNG")
+                                    img_pac = base64.b64encode(buf.getvalue()).decode()
                             
-                            if not bloqueo:
-                                # Procesamiento de Firmas
-                                img_pac = None; img_doc = None
-                                if canvas_pac.image_data is not None:
-                                    if not np.all(canvas_pac.image_data[:,:,3] == 0): 
-                                        img = Image.fromarray(canvas_pac.image_data.astype('uint8'), 'RGBA')
-                                        buf = io.BytesIO(); img.save(buf, format="PNG"); img_pac = base64.b64encode(buf.getvalue()).decode()
+                            if "Aviso" not in tipo_doc:
+                                if canvas_doc.image_data is not None:
+                                    if not np.all(canvas_doc.image_data[:,:,3] == 0): 
+                                        img = Image.fromarray(canvas_doc.image_data.astype('uint8'), 'RGBA')
+                                        buf = io.BytesIO()
+                                        img.save(buf, format="PNG")
+                                        img_doc = base64.b64encode(buf.getvalue()).decode()
                                 
-                                if "Aviso" not in tipo_doc:
-                                    if canvas_doc.image_data is not None:
-                                        if not np.all(canvas_doc.image_data[:,:,3] == 0): 
-                                            img = Image.fromarray(canvas_doc.image_data.astype('uint8'), 'RGBA')
-                                            buf = io.BytesIO(); img.save(buf, format="PNG"); img_doc = base64.b64encode(buf.getvalue()).decode()
-                                    
-                                    img_t1 = None; img_t2 = None
-                                    if nivel_riesgo == 'HIGH_RISK':
-                                        if canvas_t1.image_data is not None:
-                                            if not np.all(canvas_t1.image_data[:,:,3] == 0): 
-                                                img = Image.fromarray(canvas_t1.image_data.astype('uint8'), 'RGBA')
-                                                buf = io.BytesIO(); img.save(buf, format="PNG"); img_t1 = base64.b64encode(buf.getvalue()).decode()
-                                        if canvas_t2.image_data is not None:
-                                            if not np.all(canvas_t2.image_data[:,:,3] == 0): 
-                                                img = Image.fromarray(canvas_t2.image_data.astype('uint8'), 'RGBA')
-                                                buf = io.BytesIO(); img.save(buf, format="PNG"); img_t2 = base64.b64encode(buf.getvalue()).decode()
-                                    
-                                    # Datos para el PDF
-                                    doc_full = DOCS_INFO[doc_name_sel]['nombre']
-                                    cedula_full = DOCS_INFO[doc_name_sel]['cedula']
-                                    nombre_paciente_full = f"{p_obj['nombre']} {p_obj['apellido_paterno']} {p_obj.get('apellido_materno','')}"
-                                    testigos_dict = {'n1': t1_name, 'n2': t2_name, 'img_t1': img_t1, 'img_t2': img_t2}
-                                    edad_actual, _ = calcular_edad_completa(p_obj['fecha_nacimiento'])
-                                    tutor_info = {'nombre': p_obj.get('tutor', ''), 'relacion': p_obj.get('parentesco_tutor', '')}
-                                    
-                                    # Generación
-                                    pdf_bytes = crear_pdf_consentimiento(nombre_paciente_full, doc_full, cedula_full, tipo_doc, tratamiento_legal, riesgo_legal, img_pac, img_doc, testigos_dict, nivel_riesgo, edad_actual, tutor_info)
-                                    prefix = "CONSENTIMIENTO" if "Consentimiento" in tipo_doc else "AVISO_PRIVACIDAD"
-                                    clean_filename = f"{prefix}_{formato_nombre_legal(p_obj['nombre'])}_{formato_nombre_legal(p_obj['apellido_paterno'])}.pdf".replace(" ", "_")
-                                    st.download_button("Descargar PDF Firmado", pdf_bytes, clean_filename, "application/pdf")
-                    else:
-                        # ESTADO BLOQUEADO
-                        st.warning("🔒 **ÁREA DE FIRMA BLOQUEADA:** Para proceder, el paciente debe leer el texto superior y marcar la casilla de aceptación.")
-                
-                else:
-                    st.warning("⚠️ No se requiere documento legal para este concepto.")  
+                                if nivel_riesgo == 'HIGH_RISK':
+                                    if canvas_t1.image_data is not None:
+                                        if not np.all(canvas_t1.image_data[:,:,3] == 0): 
+                                            img = Image.fromarray(canvas_t1.image_data.astype('uint8'), 'RGBA')
+                                            buf = io.BytesIO()
+                                            img.save(buf, format="PNG")
+                                            img_t1 = base64.b64encode(buf.getvalue()).decode()
+                                    if canvas_t2.image_data is not None:
+                                        if not np.all(canvas_t2.image_data[:,:,3] == 0): 
+                                            img = Image.fromarray(canvas_t2.image_data.astype('uint8'), 'RGBA')
+                                            buf = io.BytesIO()
+                                            img.save(buf, format="PNG")
+                                            img_t2 = base64.b64encode(buf.getvalue()).decode()
+                            
+                            doc_full = DOCS_INFO[doc_name_sel]['nombre']
+                            cedula_full = DOCS_INFO[doc_name_sel]['cedula']
+                            nombre_paciente_full = f"{p_obj['nombre']} {p_obj['apellido_paterno']} {p_obj.get('apellido_materno','')}"
+                            testigos_dict = {'n1': t1_name, 'n2': t2_name, 'img_t1': img_t1, 'img_t2': img_t2}
+                            edad_actual, _ = calcular_edad_completa(p_obj['fecha_nacimiento'])
+                            tutor_info = {'nombre': p_obj.get('tutor', ''), 'relacion': p_obj.get('parentesco_tutor', '')}
+                            
+                            pdf_bytes = crear_pdf_consentimiento(nombre_paciente_full, doc_full, cedula_full, tipo_doc, tratamiento_legal, riesgo_legal, img_pac, img_doc, testigos_dict, nivel_riesgo, edad_actual, tutor_info)
+                            prefix = "CONSENTIMIENTO" if "Consentimiento" in tipo_doc else "AVISO_PRIVACIDAD"
+                            clean_filename = f"{prefix}_{formato_nombre_legal(p_obj['nombre'])}_{formato_nombre_legal(p_obj['apellido_paterno'])}.pdf".replace(" ", "_")
+                            st.download_button("Descargar PDF Firmado", pdf_bytes, clean_filename, "application/pdf")
+                else: 
+                    st.warning("⚠️ No se genera documento legal para este concepto.")
+
+    elif menu == "6. Control Asistencia":
+        st.title("🆔 Asistencia")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("Entrada Dr. Emmanuel"): 
+                ok, m = registrar_movimiento("Dr. Emmanuel", "Entrada")
+                if ok: st.success(m) 
+                else: st.warning(m)
+        with col_b:
+            if st.button("Salida Dr. Emmanuel"): 
+                ok, m = registrar_movimiento("Dr. Emmanuel", "Salida")
+                if ok: st.success(m)
+                else: st.warning(m)
+    
+    conn.close()
+
+if __name__ == "__main__":
+    if st.session_state.perfil is None: pantalla_login()
+    elif st.session_state.perfil == "Consultorio": vista_consultorio()
+    elif st.session_state.perfil == "Administracion": 
+        st.title("Admin")
+        st.button("Salir", on_click=lambda: st.session_state.update(perfil=None))
