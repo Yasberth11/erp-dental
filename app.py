@@ -186,7 +186,8 @@ def migrar_tablas():
     conn = get_db_connection()
     c = conn.cursor()
     
-    # [NUEVO V48.0] COLUMNAS PARA OBSERVACIONES ADMINISTRATIVAS
+    # [NUEVO V48.0] COLUMNAS PARA EL SEMÁFORO Y OBSERVACIONES
+    # Estas son OBLIGATORIAS para que funcionen las mejoras visuales que pediste
     try: c.execute("ALTER TABLE pacientes ADD COLUMN nota_administrativa TEXT")
     except: pass
     try: c.execute("ALTER TABLE citas ADD COLUMN observaciones TEXT")
@@ -200,18 +201,18 @@ def migrar_tablas():
         id_paciente TEXT, diente TEXT, estado TEXT, fecha_actualizacion TEXT,
         PRIMARY KEY (id_paciente, diente))''')
 
-    # Migraciones previas (Seguridad)
+    # Migraciones previas (Seguridad y Mantenimiento)
     try: c.execute(f"ALTER TABLE servicios ADD COLUMN duracion INTEGER")
     except: pass
     try: c.execute(f"ALTER TABLE citas ADD COLUMN duracion INTEGER")
     except: pass
     
-    # Columnas pacientes
+    # Columnas pacientes (Historial médico completo)
     for col in ['parentesco_tutor', 'telefono_emergencia', 'antecedentes_medicos', 'ahf', 'app', 'apnp', 'sexo', 'domicilio', 'tutor', 'contacto_emergencia', 'ocupacion', 'estado_civil', 'motivo_consulta', 'exploracion_fisica', 'diagnostico']:
         try: c.execute(f"ALTER TABLE pacientes ADD COLUMN {col} TEXT")
         except: pass
     
-    # Columnas citas
+    # Columnas citas (Financiero y Categorías)
     for col in ['costo_laboratorio', 'categoria']:
         try: c.execute(f"ALTER TABLE citas ADD COLUMN {col} REAL" if col == 'costo_laboratorio' else f"ALTER TABLE citas ADD COLUMN {col} TEXT")
         except: pass
@@ -220,14 +221,27 @@ def migrar_tablas():
     except: pass
     conn.commit(); conn.close()
 
+# [V41 RESTAURADO] FUNCIONES DE MANTENIMIENTO (No las borres, son útiles)
+def actualizar_duraciones():
+    conn = get_db_connection(); c = conn.cursor()
+    c.execute("UPDATE servicios SET duracion = 30 WHERE duracion IS NULL")
+    conn.commit(); conn.close()
+
+def actualizar_niveles_riesgo():
+    conn = get_db_connection(); c = conn.cursor()
+    # Asegura que todos los servicios tengan un nivel de riesgo por defecto
+    c.execute("UPDATE servicios SET consent_level = 'LOW_RISK' WHERE consent_level IS NULL")
+    conn.commit(); conn.close()
+
 def init_db():
     conn = get_db_connection()
     c = conn.cursor()
     # Tablas base (Pacientes, Citas, Auditoria, Asistencia, Servicios, Odontograma)
-    # [V48.0] Se agrega nota_administrativa a la creación inicial de pacientes
+    
+    # [V48.0] INCLUIMOS nota_administrativa EN LA CREACIÓN
     c.execute('''CREATE TABLE IF NOT EXISTS pacientes (id_paciente TEXT PRIMARY KEY, fecha_registro TEXT, nombre TEXT, apellido_paterno TEXT, apellido_materno TEXT, telefono TEXT, email TEXT, rfc TEXT, regimen TEXT, uso_cfdi TEXT, cp TEXT, nota_fiscal TEXT, sexo TEXT, estado TEXT, fecha_nacimiento TEXT, antecedentes_medicos TEXT, ahf TEXT, app TEXT, apnp TEXT, domicilio TEXT, tutor TEXT, parentesco_tutor TEXT, contacto_emergencia TEXT, telefono_emergencia TEXT, ocupacion TEXT, estado_civil TEXT, motivo_consulta TEXT, exploracion_fisica TEXT, diagnostico TEXT, nota_administrativa TEXT)''')
     
-    # [V48.0] Se agrega observaciones a la creación inicial de citas
+    # [V48.0] INCLUIMOS observaciones EN LA CREACIÓN
     c.execute('''CREATE TABLE IF NOT EXISTS citas (timestamp INTEGER, fecha TEXT, hora TEXT, id_paciente TEXT, nombre_paciente TEXT, tipo TEXT, tratamiento TEXT, diente TEXT, doctor_atendio TEXT, precio_lista REAL, precio_final REAL, porcentaje REAL, tiene_factura TEXT, iva REAL, subtotal REAL, metodo_pago TEXT, estado_pago TEXT, requiere_factura TEXT, notas TEXT, monto_pagado REAL, saldo_pendiente REAL, fecha_pago TEXT, costo_laboratorio REAL, categoria TEXT, duracion INTEGER, estatus_asistencia TEXT, observaciones TEXT)''')
     
     c.execute('''CREATE TABLE IF NOT EXISTS auditoria (id_evento INTEGER PRIMARY KEY AUTOINCREMENT, fecha_evento TEXT, usuario TEXT, accion TEXT, detalle TEXT)''')
@@ -245,8 +259,9 @@ def seed_data():
         c.executemany("INSERT INTO servicios (categoria, nombre_tratamiento, precio_lista, costo_laboratorio_base, consent_level, duracion) VALUES (?,?,?,?,?,?)", tratamientos)
         conn.commit()
     conn.close()
-init_db(); migrar_tablas(); seed_data()
 
+# Ejecución de inicialización completa
+init_db(); migrar_tablas(); seed_data(); actualizar_niveles_riesgo(); actualizar_duraciones()
 # ==========================================
 # 3. HELPERS (FUNCIONES DE AYUDA)
 # ==========================================
