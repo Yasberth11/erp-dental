@@ -1433,7 +1433,7 @@ def vista_consultorio():
                 else: st.info("No hay movimientos financieros registrados.")
 
     elif menu == "5. Consentimientos":
-        st.title("✒️ Blindaje Legal"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
+        st.title("✒️ Autorización de Tratamientos"); df_p = pd.read_sql("SELECT * FROM pacientes", conn)
         if not df_p.empty:
             sel = st.selectbox("Paciente:", ["..."]+df_p.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist()); 
             if sel != "...":
