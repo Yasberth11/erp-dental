@@ -789,7 +789,7 @@ def vista_consultorio():
     if st.sidebar.button("Cerrar Sesión"): st.session_state.perfil = None; st.rerun()
 
     if menu == "1. Agenda & Citas":
-        # [FIX CSS] Forzar alineación superior solo en esta pantalla
+        # [FIX CSS] Forzar alineación superior
         st.markdown("""<style>div[data-testid="column"] { justify-content: flex-start !important; }</style>""", unsafe_allow_html=True)
 
         st.title("📅 Agenda Profesional")
@@ -807,14 +807,8 @@ def vista_consultorio():
                         if r['estatus_asistencia'] == 'Asistió': color_status = "#28a745"; icono = "✅"
                         elif r['estatus_asistencia'] == 'No Asistió': color_status = "#dc3545"; icono = "❌"
                         
-                        # Uso de triples comillas para evitar errores de sintaxis en líneas largas
-                        st.markdown(f"""
-                        <div class="royal-card" style="border-left: 6px solid {color_status}; padding: 15px; min-height: 160px;">
-                            <div style="font-weight:bold; font-size:1.1em; color:#002B5B;">{r['hora']} - {r['nombre_paciente']}</div>
-                            <div style="font-size:0.9em; color:#555; margin-bottom:10px;">{r['tratamiento']}<br>Dr. {r['doctor_atendio']}</div>
-                            <div style="text-align:right; font-size:1.5em;">{icono}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        # Tarjeta Minificada
+                        st.markdown(f"""<div class="royal-card" style="border-left: 6px solid {color_status}; padding: 15px; min-height: 160px;"><div style="font-weight:bold; font-size:1.1em; color:#002B5B;">{r['hora']} - {r['nombre_paciente']}</div><div style="font-size:0.9em; color:#555; margin-bottom:10px;">{r['tratamiento']}<br>Dr. {r['doctor_atendio']}</div><div style="text-align:right; font-size:1.5em;">{icono}</div></div>""", unsafe_allow_html=True)
                         
                         c_b1, c_b2 = st.columns(2)
                         if c_b1.button("Llegó", key=f"lg_{r['rowid']}", use_container_width=True):
@@ -839,13 +833,12 @@ def vista_consultorio():
                     df = pd.read_sql(query, conn)
                     st.dataframe(df, use_container_width=True, hide_index=True)
 
-            # [GESTIÓN DE AGENDADO]
+            # [GESTIÓN]
             fecha_ver_obj = st.date_input("📅 Visualizar Fecha:", datetime.now(TZ_MX)); fecha_ver_str = format_date_latino(fecha_ver_obj)
             
             with st.expander("➕ Agendar Cita Nueva", expanded=True):
                 tab_reg, tab_new = st.tabs(["Registrado", "Prospecto"])
                 
-                # --- TAB REGISTRADO ---
                 with tab_reg:
                     servicios = pd.read_sql("SELECT * FROM servicios", conn); cats = servicios['categoria'].unique()
                     pacientes_raw = pd.read_sql("SELECT id_paciente, nombre, apellido_paterno FROM pacientes", conn)
@@ -879,7 +872,6 @@ def vista_consultorio():
                                  conn.commit(); st.success("Agendado"); time.sleep(1); st.rerun()
                          else: st.error("Seleccione un paciente.")
 
-                # --- TAB PROSPECTO ---
                 with tab_new:
                     st.caption("Datos Básicos")
                     c_n1, c_n2 = st.columns(2)
@@ -916,7 +908,6 @@ def vista_consultorio():
                                  conn.commit(); st.success("Prospecto Agendado"); time.sleep(1); st.rerun()
                         else: st.error("Datos incompletos.")
 
-            # [MODIFICAR AGENDA]
             st.markdown("### 🔄 Modificar Agenda")
             df_c = pd.read_sql("SELECT * FROM citas", conn)
             if not df_c.empty:
@@ -952,7 +943,7 @@ def vista_consultorio():
                                 c.execute("DELETE FROM citas WHERE rowid=?", (id_target_row,))
                                 conn.commit(); st.error("Eliminado permanentemente."); time.sleep(1); st.rerun()
 
-        # === COLUMNA DERECHA: VISUALIZADOR ===
+        # === COLUMNA DERECHA: VISUALIZADOR BLINDADO (NO MORE ERRORS) ===
         with col_cal2:
             st.markdown(f"#### 🗓️ Visual: {fecha_ver_str}")
             df_c = pd.read_sql("SELECT * FROM citas", conn)
@@ -975,8 +966,10 @@ def vista_consultorio():
                                 else: ocupacion_map[bloque_str] = {"tipo": "bloqueado", "parent": r['nombre_paciente']}
                     except: pass
             
-            # [FIX SINTAXIS] Construcción segura con triples comillas
-            html_agenda = """<div style='height: 600px; overflow-y: auto; padding: 5px; background-color: white; border: 1px solid #eee; border-radius: 8px;'>"""
+            # --- CONSTRUCCIÓN DE HTML BLINDADA (LISTA + JOIN) ---
+            # Esto evita CUALQUIER error de indentación o sintaxis
+            html_parts = []
+            html_parts.append("<div style='height: 600px; overflow-y: auto; padding: 5px; background-color: white; border: 1px solid #eee; border-radius: 8px;'>")
             
             for slot in slots:
                 if slot in ocupacion_map:
@@ -985,30 +978,20 @@ def vista_consultorio():
                         r = info["data"]
                         color_border = "#FF5722" if "PROS" in str(r['id_paciente']) else "#002B5B"
                         bg_c = "#e3f2fd" if r['estatus_asistencia'] == 'Asistió' else "#f8f9fa"
-                        
-                        html_agenda += f"""
-                        <div style='padding:8px; margin-bottom:4px; background-color:{bg_c}; border-left:5px solid {color_border}; border-radius:4px; font-size:0.9em; box-shadow: 0 1px 2px rgba(0,0,0,0.1);'>
-                            <b>{slot}</b> | {r['nombre_paciente']}<br>
-                            <span style='color:#666; font-size:0.85em;'>{r['tratamiento']} ({info['dur']}m)</span>
-                        </div>
-                        """
+                        # Construimos el string en una sola linea para evitar errores de Python multiline
+                        item = f"<div style='padding:8px; margin-bottom:4px; background-color:{bg_c}; border-left:5px solid {color_border}; border-radius:4px; font-size:0.9em; box-shadow: 0 1px 2px rgba(0,0,0,0.1);'><b>{slot}</b> | {r['nombre_paciente']}<br><span style='color:#666; font-size:0.85em;'>{r['tratamiento']} ({info['dur']}m)</span></div>"
+                        html_parts.append(item)
                     else: 
-                        html_agenda += f"""
-                        <div style='padding:4px; margin-bottom:4px; background-color:#f1f1f1; color:#aaa; font-size:0.8em; margin-left: 15px; border-left: 2px solid #ddd;'>
-                            ⬇️ <i>En tratamiento ({info['parent']})</i>
-                        </div>
-                        """
+                        item = f"<div style='padding:4px; margin-bottom:4px; background-color:#f1f1f1; color:#aaa; font-size:0.8em; margin-left: 15px; border-left: 2px solid #ddd;'>⬇️ <i>En tratamiento ({info['parent']})</i></div>"
+                        html_parts.append(item)
                 else: 
-                    html_agenda += f"""
-                    <div style='padding:8px; margin-bottom:2px; border-bottom:1px dashed #eee; display:flex; align-items:center;'>
-                        <span style='font-weight:bold; color:#4CAF50; width:60px;'>{slot}</span>
-                        <span style='color:#81C784; font-size:0.9em;'>Disponible</span>
-                    </div>
-                    """
+                    item = f"<div style='padding:8px; margin-bottom:2px; border-bottom:1px dashed #eee; display:flex; align-items:center;'><span style='font-weight:bold; color:#4CAF50; width:60px;'>{slot}</span><span style='color:#81C784; font-size:0.9em;'>Disponible</span></div>"
+                    html_parts.append(item)
             
-            html_agenda += "</div>"
-            st.markdown(html_agenda, unsafe_allow_html=True)
-    
+            html_parts.append("</div>")
+            
+            # Renderizado final seguro
+            st.markdown("".join(html_parts), unsafe_allow_html=True)    
     elif menu == "2. Gestión Pacientes":
         st.title("📂 Expediente Clínico"); tab_b, tab_n, tab_e, tab_odo, tab_img = st.tabs(["🔍 BUSCAR", "➕ ALTA", "✏️ EDITAR", "🦷 ODONTOGRAMA", "📸 IMÁGENES"])
         with tab_b:
