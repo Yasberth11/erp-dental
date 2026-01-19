@@ -789,21 +789,15 @@ def vista_consultorio():
     if st.sidebar.button("Cerrar Sesión"): st.session_state.perfil = None; st.rerun()
 
     if menu == "1. Agenda & Citas":
-        # [FIX V46.9] CSS LOCAL: Fuerza alineación superior y evita que la agenda caiga al fondo
-        st.markdown("""
-            <style>
-            div[data-testid="column"] { justify-content: flex-start !important; }
-            </style>
-        """, unsafe_allow_html=True)
+        # [FIX CSS] Forzar alineación superior solo en esta pantalla
+        st.markdown("""<style>div[data-testid="column"] { justify-content: flex-start !important; }</style>""", unsafe_allow_html=True)
 
         st.title("📅 Agenda Profesional")
         
-        # --- ZONA 1: DASHBOARD OPERATIVO (TARJETAS HOY) ---
+        # --- ZONA 1: DASHBOARD OPERATIVO (MEJORA VISUAL) ---
         hoy_str = get_fecha_mx()
-        
         with st.expander(f"🔥 PACIENTES DEL DÍA: {hoy_str}", expanded=True):
             citas_hoy = pd.read_sql(f"SELECT rowid, * FROM citas WHERE fecha='{hoy_str}' AND estado_pago != 'CANCELADO' ORDER BY hora ASC", conn)
-            
             if not citas_hoy.empty:
                 cols_cards = st.columns(3) 
                 for i, (_, r) in enumerate(citas_hoy.iterrows()):
@@ -813,38 +807,55 @@ def vista_consultorio():
                         if r['estatus_asistencia'] == 'Asistió': color_status = "#28a745"; icono = "✅"
                         elif r['estatus_asistencia'] == 'No Asistió': color_status = "#dc3545"; icono = "❌"
                         
-                        # Tarjeta construida sin indentación extra
-                        st.markdown(f"""<div class="royal-card" style="border-left: 6px solid {color_status}; padding: 15px; min-height: 150px;"><div style="font-weight:bold; font-size:1.1em; color:#002B5B;">{r['hora']} - {r['nombre_paciente']}</div><div style="font-size:0.9em; color:#555; margin-bottom:10px;">{r['tratamiento']}<br>Dr. {r['doctor_atendio']}</div><div style="text-align:right; font-size:1.5em;">{icono}</div></div>""", unsafe_allow_html=True)
+                        # Tarjeta Visual
+                        st.markdown(f"""<div class="royal-card" style="border-left: 6px solid {color_status}; padding: 15px; min-height: 160px;"><div style="font-weight:bold; font-size:1.1em; color:#002B5B;">{r['hora']} - {r['nombre_paciente']}</div><div style="font-size:0.9em; color:#555; margin-bottom:10px;">{r['tratamiento']}<br>Dr. {r['doctor_atendio']}</div><div style="text-align:right; font-size:1.5em;">{icono}</div></div>""", unsafe_allow_html=True)
                         
                         c_b1, c_b2 = st.columns(2)
                         if c_b1.button("Llegó", key=f"lg_{r['rowid']}", use_container_width=True):
                              c = conn.cursor(); c.execute("UPDATE citas SET estatus_asistencia='Asistió' WHERE rowid=?", (r['rowid'],)); conn.commit(); st.rerun()
                         if c_b2.button("Faltó", key=f"ft_{r['rowid']}", use_container_width=True):
                              c = conn.cursor(); nota = f"\n[SISTEMA]: Inasistencia {hoy_str}."; c.execute("UPDATE citas SET estatus_asistencia='No Asistió', notas=notas || ? WHERE rowid=?", (nota, r['rowid'])); conn.commit(); st.warning("Falta registrada"); time.sleep(1); st.rerun()
-            else:
-                st.info("☕ No hay citas programadas para hoy.")
+            else: st.info("☕ No hay citas programadas para hoy.")
 
         st.divider()
 
-        # --- ZONA 2: GESTIÓN Y VISUALIZADOR ---
+        # --- ZONA 2: GESTIÓN (RESTAURADA V41) Y VISUAL (OPTIMIZADA) ---
         col_cal1, col_cal2 = st.columns([1, 1]) 
         
-        # === COLUMNA IZQUIERDA: GESTIÓN ===
         with col_cal1:
             st.markdown("### 🛠️ Panel de Gestión")
-            fecha_ver_obj = st.date_input("Visualizar Fecha:", datetime.now(TZ_MX)); fecha_ver_str = format_date_latino(fecha_ver_obj)
             
-            with st.expander("➕ Agendar Cita", expanded=False):
-                tab_reg, tab_new = st.tabs(["Paciente Registrado", "Nuevo Prospecto"])
+            # [V41 RESTAURADO] RECALL SYSTEM
+            with st.expander("🔔 Pacientes para Recall (> 6 Meses)", expanded=False):
+                try:
+                    df_recall = pd.read_sql("SELECT nombre_paciente, MAX(fecha) as ultima_cita FROM citas GROUP BY id_paciente", conn)
+                    st.dataframe(df_recall, use_container_width=True)
+                except: st.info("No hay datos suficientes.")
+
+            # [V41 RESTAURADO] BUSCADOR
+            with st.expander("🔍 Buscar Cita Global", expanded=False):
+                q_cita = st.text_input("Buscar por nombre:", key="search_global_unique")
+                if q_cita:
+                    query = f"""SELECT c.rowid, c.fecha, c.hora, c.tratamiento, c.nombre_paciente, c.estado_pago FROM citas c WHERE c.nombre_paciente LIKE '%{formato_nombre_legal(q_cita)}%' ORDER BY c.timestamp DESC"""
+                    df = pd.read_sql(query, conn)
+                    st.dataframe(df, use_container_width=True, hide_index=True)
+
+            # [V41 RESTAURADO] GESTIÓN DE AGENDADO
+            fecha_ver_obj = st.date_input("📅 Visualizar Fecha:", datetime.now(TZ_MX)); fecha_ver_str = format_date_latino(fecha_ver_obj)
+            
+            with st.expander("➕ Agendar Cita Nueva", expanded=True):
+                tab_reg, tab_new = st.tabs(["Registrado", "Prospecto"])
+                
+                # --- TAB REGISTRADO (V41 Logic) ---
                 with tab_reg:
                     servicios = pd.read_sql("SELECT * FROM servicios", conn); cats = servicios['categoria'].unique()
                     pacientes_raw = pd.read_sql("SELECT id_paciente, nombre, apellido_paterno FROM pacientes", conn)
                     lista_pac = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist() if not pacientes_raw.empty else []
                     
-                    p_sel_r = st.selectbox("Paciente*", ["Seleccionar..."] + lista_pac, key="p_reg_v2")
-                    cat_sel_r = st.selectbox("Categoría", cats, key="cat_reg_v2")
+                    p_sel_r = st.selectbox("Paciente*", ["Seleccionar..."] + lista_pac, key="p_reg_v41")
+                    cat_sel_r = st.selectbox("Categoría", cats, key="cat_reg_v41")
                     trats_filtrados_r = servicios[servicios['categoria'] == cat_sel_r]['nombre_tratamiento'].unique()
-                    trat_sel_r = st.selectbox("Tratamiento*", trats_filtrados_r, key="trat_reg_v2")
+                    trat_sel_r = st.selectbox("Tratamiento*", trats_filtrados_r, key="trat_reg_v41")
                     
                     dur_default_r = 30
                     if trat_sel_r:
@@ -852,10 +863,10 @@ def vista_consultorio():
                         if not row_dur.empty: dur_default_r = int(row_dur.iloc[0]['duracion'])
                     
                     c_d1, c_d2 = st.columns(2)
-                    duracion_cita_r = c_d1.number_input("Duración (min)", value=dur_default_r, step=30, key="dur_reg_v2")
-                    h_sel_r = c_d2.selectbox("Hora", generar_slots_tiempo(), key="hora_reg_v2")
-                    d_sel_r = st.selectbox("Doctor", LISTA_DOCTORES, key="doc_reg_v2")
-                    urgencia_r = st.checkbox("🚨 Urgencia", key="urg_reg_v2")
+                    duracion_cita_r = c_d1.number_input("Duración (min)", value=dur_default_r, step=30, key="dur_reg_v41")
+                    h_sel_r = c_d2.selectbox("Hora Inicio", generar_slots_tiempo(), key="hora_reg_v41")
+                    d_sel_r = st.selectbox("Doctor", LISTA_DOCTORES, key="doc_reg_v41")
+                    urgencia_r = st.checkbox("🚨 Urgencia", key="urg_reg_v41")
                     
                     if st.button("💾 Confirmar Cita (Registrado)", use_container_width=True):
                          if p_sel_r != "Seleccionar...":
@@ -869,44 +880,82 @@ def vista_consultorio():
                                  conn.commit(); st.success("Agendado"); time.sleep(1); st.rerun()
                          else: st.error("Seleccione un paciente.")
 
+                # --- TAB PROSPECTO (V41 Logic RESTAURADA COMPLETA) ---
                 with tab_new:
-                    nom_pros = st.text_input("Nombre Completo", key="new_p_nom")
-                    tel_pros = st.text_input("Teléfono", key="new_p_tel")
-                    trat_pros = st.text_input("Motivo/Tratamiento", key="new_p_trat")
+                    st.caption("Datos Básicos")
                     c_n1, c_n2 = st.columns(2)
-                    h_pros = c_n1.selectbox("Hora", generar_slots_tiempo(), key="new_p_hora")
-                    doc_pros = c_n2.selectbox("Doctor", LISTA_DOCTORES, key="new_p_doc")
+                    nom_pros = c_n1.text_input("Nombre Completo*", key="new_p_nom_v41")
+                    tel_pros = c_n2.text_input("Teléfono (10)*", key="new_p_tel_v41", max_chars=10)
+                    
+                    st.caption("Detalles del Tratamiento")
+                    servicios_p = pd.read_sql("SELECT * FROM servicios", conn)
+                    cats_p = servicios_p['categoria'].unique()
+                    cat_sel_p = st.selectbox("Categoría", cats_p, key="cat_pros_v41")
+                    trats_filtrados_p = servicios_p[servicios_p['categoria'] == cat_sel_p]['nombre_tratamiento'].unique()
+                    trat_sel_p = st.selectbox("Tratamiento*", trats_filtrados_p, key="trat_pros_v41")
+                    
+                    dur_default_p = 30
+                    if trat_sel_p:
+                        row_dur_p = servicios_p[servicios_p['nombre_tratamiento'] == trat_sel_p]
+                        if not row_dur_p.empty: dur_default_p = int(row_dur_p.iloc[0]['duracion'])
+                    
+                    c_tp1, c_tp2 = st.columns(2)
+                    duracion_cita_p = c_tp1.number_input("Duración", value=dur_default_p, step=30, key="dur_pros_v41")
+                    hora_pros = c_tp2.selectbox("Hora Inicio", generar_slots_tiempo(), key="hora_pros_v41")
+                    doc_pros = st.selectbox("Doctor", LISTA_DOCTORES, key="doc_pros_v41")
+                    urgencia_p = st.checkbox("🚨 Es Urgencia", key="urg_pros_v41")
+                    
                     if st.button("💾 Agendar Prospecto", use_container_width=True):
                         if nom_pros and len(tel_pros) == 10:
-                             ocupado = verificar_disponibilidad(fecha_ver_str, h_pros)
-                             if ocupado: st.error("⚠️ Horario Ocupado")
+                             ocupado = verificar_disponibilidad(fecha_ver_str, hora_pros, duracion_cita_p)
+                             if ocupado and not urgencia_p: st.error("⚠️ Horario Ocupado")
                              else:
                                  id_temp = f"PROS-{int(time.time())}"
                                  c = conn.cursor()
-                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, estado_pago, estatus_asistencia, notas) VALUES (?,?,?,?,?,?,?,?,?,?,?)''', 
-                                           (int(time.time()), fecha_ver_str, h_pros, id_temp, formato_nombre_legal(nom_pros), "Primera Vez", trat_pros, doc_pros, "Pendiente", "Programada", f"Tel: {tel_pros}"))
+                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, estado_pago, estatus_asistencia, notas, duracion) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''', 
+                                           (int(time.time()), fecha_ver_str, hora_pros, id_temp, formato_nombre_legal(nom_pros), "Primera Vez", trat_sel_p, doc_pros, "Pendiente", "Programada", f"Tel: {tel_pros}", duracion_cita_p))
                                  conn.commit(); st.success("Prospecto Agendado"); time.sleep(1); st.rerun()
                         else: st.error("Datos incompletos.")
 
-            with st.expander("🔍 Buscar Cita Global", expanded=False):
-                # [FIX KEY] Agregado key único para evitar error de duplicado
-                q_cita = st.text_input("Buscar por nombre:", key="buscador_agenda_unico_v469")
-                if q_cita:
-                    query = f"""SELECT c.rowid, c.fecha, c.hora, c.tratamiento, c.nombre_paciente, c.estado_pago FROM citas c WHERE c.nombre_paciente LIKE '%{formato_nombre_legal(q_cita)}%' ORDER BY c.timestamp DESC"""
-                    df = pd.read_sql(query, conn)
-                    st.dataframe(df, use_container_width=True, hide_index=True)
-            
-            with st.expander("✏️ Reprogramar / Cancelar", expanded=False):
-                citas_dia_mod = pd.read_sql(f"SELECT rowid, hora, nombre_paciente FROM citas WHERE fecha='{fecha_ver_str}'", conn)
-                if not citas_dia_mod.empty:
-                    lista_mod = [f"{r['rowid']} - {r['hora']} - {r['nombre_paciente']}" for _, r in citas_dia_mod.iterrows()]
-                    sel_mod = st.selectbox("Seleccionar Cita del Día:", lista_mod)
-                    if sel_mod:
-                        rid = sel_mod.split(" - ")[0]
-                        if st.button("🗑️ Eliminar/Cancelar", type="primary"):
-                             c = conn.cursor(); c.execute("UPDATE citas SET estado_pago='CANCELADO' WHERE rowid=?", (rid,)); conn.commit(); st.success("Cancelada"); st.rerun()
+            # [V41 RESTAURADO] MODIFICAR AGENDA (MOVER/CANCELAR/ELIMINAR)
+            st.markdown("### 🔄 Modificar Agenda")
+            df_c = pd.read_sql("SELECT * FROM citas", conn)
+            if not df_c.empty:
+                df_dia = df_c[df_c['fecha'] == fecha_ver_str]
+                lista_citas_dia = [f"{r['hora']} - {r['nombre_paciente']} ({r['tratamiento']})" for i, r in df_dia.iterrows()]
+                cita_sel = st.selectbox("Seleccionar Cita a Modificar:", ["Seleccionar..."] + lista_citas_dia)
+                
+                if cita_sel != "Seleccionar...":
+                    hora_target = cita_sel.split(" - ")[0]
+                    nom_target = cita_sel.split(" - ")[1].split(" (")[0]
+                    
+                    # Recuperamos ID para precisión
+                    try: row_target = df_dia[(df_dia['hora'] == hora_target) & (df_dia['nombre_paciente'] == nom_target)].iloc[0]; id_target_row = row_target['rowid']
+                    except: id_target_row = None
 
-        # === COLUMNA DERECHA: VISUALIZADOR (FIX RENDERIZADO) ===
+                    if id_target_row:
+                        col_inputs, col_actions = st.columns([2, 1])
+                        with col_inputs: 
+                            new_date_res = st.date_input("Nueva Fecha", datetime.now(TZ_MX))
+                            new_h_res = st.selectbox("Nueva Hora", generar_slots_tiempo(), key="reag_time_fix")
+                        with col_actions:
+                            st.write(""); st.write("")
+                            if st.button("🗓️ MOVER", use_container_width=True): 
+                                c = conn.cursor()
+                                c.execute("UPDATE citas SET fecha=?, hora=?, estado_pago='Pendiente', estatus_asistencia='Programada' WHERE rowid=?", (format_date_latino(new_date_res), new_h_res, id_target_row))
+                                conn.commit(); st.success("Reagendada"); time.sleep(1); st.rerun()
+                            
+                            if st.button("❌ CANCELAR", type="secondary", use_container_width=True): 
+                                c = conn.cursor()
+                                c.execute("UPDATE citas SET estado_pago='CANCELADO', estatus_asistencia='Canceló' WHERE rowid=?", (id_target_row,))
+                                conn.commit(); st.warning("Cancelada"); time.sleep(1); st.rerun()
+                            
+                            if st.button("🗑️ ELIMINAR", type="primary", use_container_width=True): 
+                                c = conn.cursor()
+                                c.execute("DELETE FROM citas WHERE rowid=?", (id_target_row,))
+                                conn.commit(); st.error("Eliminado permanentemente."); time.sleep(1); st.rerun()
+
+        # === COLUMNA DERECHA: VISUALIZADOR (MEJORA V46 - FIX GAPS) ===
         with col_cal2:
             st.markdown(f"#### 🗓️ Visual: {fecha_ver_str}")
             df_c = pd.read_sql("SELECT * FROM citas", conn)
@@ -929,7 +978,7 @@ def vista_consultorio():
                                 else: ocupacion_map[bloque_str] = {"tipo": "bloqueado", "parent": r['nombre_paciente']}
                     except: pass
             
-            # [FIX CRITICO] Construcción HTML lineal sin saltos de linea ni indentación extraña
+            # HTML Bloque Único para evitar gaps visuales
             html_agenda = "<div style='height: 600px; overflow-y: auto; padding: 5px; background-color: white; border: 1px solid #eee; border-radius: 8px;'>"
             for slot in slots:
                 if slot in ocupacion_map:
@@ -938,15 +987,13 @@ def vista_consultorio():
                         r = info["data"]
                         color_border = "#FF5722" if "PROS" in str(r['id_paciente']) else "#002B5B"
                         bg_c = "#e3f2fd" if r['estatus_asistencia'] == 'Asistió' else "#f8f9fa"
-                        # Concatenación en una sola linea para evitar error de markdown code block
+                        # Concatenación en linea para evitar errores
                         html_agenda += f"<div style='padding:8px; margin-bottom:4px; background-color:{bg_c}; border-left:5px solid {color_border}; border-radius:4px; font-size:0.9em; box-shadow: 0 1px 2px rgba(0,0,0,0.1);'><b>{slot}</b> | {r['nombre_paciente']}<br><span style='color:#666; font-size:0.85em;'>{r['tratamiento']} ({info['dur']}m)</span></div>"
                     else: 
                         html_agenda += f"<div style='padding:4px; margin-bottom:4px; background-color:#f1f1f1; color:#aaa; font-size:0.8em; margin-left: 15px; border-left: 2px solid #ddd;'>⬇️ <i>En tratamiento ({info['parent']})</i></div>"
                 else: 
                     html_agenda += f"<div style='padding:8px; margin-bottom:2px; border-bottom:1px dashed #eee; display:flex; align-items:center;'><span style='font-weight:bold; color:#4CAF50; width:60px;'>{slot}</span><span style='color:#81C784; font-size:0.9em;'>Disponible</span></div>"
             html_agenda += "</div>"
-            
-            # Renderizado final seguro
             st.markdown(html_agenda, unsafe_allow_html=True)
     
     elif menu == "2. Gestión Pacientes":
