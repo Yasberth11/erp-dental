@@ -1090,45 +1090,47 @@ def vista_consultorio():
                         
                         hoy = datetime.now(TZ_MX).date(); df_raw_notas = pd.read_sql(f"SELECT fecha, tratamiento, notas FROM citas WHERE id_paciente='{id_sel_str}' ORDER BY timestamp DESC", conn); df_raw_notas['fecha_dt'] = pd.to_datetime(df_raw_notas['fecha'], format="%d/%m/%Y", errors='coerce').dt.date; hist_notas = df_raw_notas[df_raw_notas['fecha_dt'] <= hoy].drop(columns=['fecha_dt'])
                         if st.button("🖨️ Descargar Historia (PDF)"): 
-                            # 1. CONSULTA SQL
+                            # 1. CONSULTA SQL (ORDEN CRONOLÓGICO ASCENDENTE)
+                            # [MEJORA] Cambiamos DESC por ASC para leer la historia en orden de sucesos
                             query_historia = f"""
                                 SELECT fecha, tratamiento, notas, categoria, estatus_asistencia 
                                 FROM citas 
                                 WHERE id_paciente='{id_sel_str}' 
-                                ORDER BY timestamp DESC
+                                ORDER BY timestamp ASC
                             """
                             df_raw = pd.read_sql(query_historia, conn)
                             
-                            # 2. FILTRADO INTELIGENTE (MOTOR V47.5 - FIX FECHAS)
+                            # 2. FILTRADO ESTRICTO DE EJECUCIÓN (MOTOR V47.6)
                             if not df_raw.empty:
-                                # A) Normalización de fechas
+                                # A) Normalización
                                 df_raw['fecha_dt'] = pd.to_datetime(df_raw['fecha'], format="%d/%m/%Y", errors='coerce')
-                                
-                                # [FIX CRÍTICO] Usamos solo la FECHA (date) pura, eliminando horas y zonas horarias
                                 hoy_date = datetime.now(TZ_MX).date()
                                 
-                                # B) LISTA NEGRA
+                                # B) LISTA NEGRA (Términos Administrativos)
                                 palabras_prohibidas = ['ABONO', 'PAGO', 'MENSUALIDAD', 'ANTICIPO', 'DEUDA', 'SALDO', 'COTIZACION', 'PRESUPUESTO']
                                 pattern_prohibido = '|'.join(palabras_prohibidas)
                                 
-                                # --- APLICACIÓN DE REGLAS ---
+                                # --- REGLAS DE BLINDAJE ---
+                                # 1. Nada Financiero
                                 mask_cat = (df_raw['categoria'] != 'Financiero')
+                                # 2. Nada con palabras de dinero
                                 mask_txt = (~df_raw['tratamiento'].str.contains(pattern_prohibido, case=False, na=False))
-                                
-                                # [FIX] Comparación segura: Fecha pura vs Fecha pura (Evita TypeError)
+                                # 3. Fechas válidas (Pasado/Presente)
                                 mask_time = (df_raw['fecha_dt'].dt.date <= hoy_date)
                                 
-                                # Regla 4: Estatus Válido
+                                # 4. [CRÍTICO] SOLO TRATAMIENTOS COMPLETADOS
+                                # Esto elimina "Programada", "Pendiente" y cualquier cita futura no realizada.
+                                # Solo pasa si el doctor presionó el botón verde "Asistió" o "Llegó".
                                 mask_status = (df_raw['estatus_asistencia'] == 'Asistió')
 
-                                # Filtrado Final
+                                # Aplicar Filtros
                                 df_clean = df_raw[mask_cat & mask_txt & mask_time & mask_status].copy()
                                 
-                                # C) LIMPIEZA VISUAL
+                                # C) LIMPIEZA DE TEXTO (Relleno de notas vacías)
                                 df_clean['notas'] = df_clean['notas'].fillna("Procedimiento realizado sin incidencias.")
                                 df_clean.loc[df_clean['notas'] == "", 'notas'] = "Procedimiento realizado sin incidencias."
                                 
-                                # Selección de columnas
+                                # Selección Final
                                 hist_notas_final = df_clean[['fecha', 'tratamiento', 'notas']]
                             else:
                                 hist_notas_final = pd.DataFrame(columns=['fecha', 'tratamiento', 'notas'])
@@ -1140,8 +1142,8 @@ def vista_consultorio():
                             except TypeError:
                                 pdf_bytes = crear_pdf_historia(p_data, hist_notas_final)
                                 
-                            clean_name = f"{p_data['id_paciente']}_HISTORIAL_LEGAL.pdf"
-                            st.download_button("📥 Bajar PDF Legal", pdf_bytes, clean_name, "application/pdf")
+                            clean_name = f"{p_data['id_paciente']}_HISTORIAL_CLINICO.pdf"
+                            st.download_button("📥 Bajar PDF Historial", pdf_bytes, clean_name, "application/pdf")
                     
                     with c_hist:
                         st.markdown("#### 📜 Notas Clínicas")
