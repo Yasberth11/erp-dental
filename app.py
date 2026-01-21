@@ -633,7 +633,11 @@ Usted tiene derecho a Acceder, Rectificar, Cancelar u Oponerse al tratamiento de
 
     else:
         pdf.set_font('Arial', 'B', 12); pdf.cell(0, 10, "CARTA DE CONSENTIMIENTO INFORMADO", 0, 1, 'C'); pdf.ln(5)
-        cuerpo = f"""LUGAR Y FECHA: Ciudad de México, a {fecha_hoy}
+        
+        # --- CAMBIO 3: FECHA LARGA EN MAYÚSCULAS ---
+        fecha_larga_str = get_fecha_larga_mx().upper()
+        
+        cuerpo = f"""LUGAR Y FECHA: TEPOTZOTLÁN, ESTADO DE MÉXICO, A {fecha_larga_str}
 NOMBRE DEL PACIENTE: {paciente_full}
 ODONTÓLOGO TRATANTE: {nombre_doctor} (Céd. Prof. {cedula_doctor})
 
