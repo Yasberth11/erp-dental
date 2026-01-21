@@ -1291,7 +1291,7 @@ def vista_consultorio():
                         pdf_bytes = crear_pdf_receta(datos_receta); st.download_button("Descargar PDF Receta", pdf_bytes, f"RECETA_{p['nombre']}.pdf", "application/pdf")
             else: st.info("Seleccione un paciente para comenzar.")
 
-    elif menu == "4. Tratamientos":
+    elif menu == "4. Tratamientos": # <--- Confirma que este número coincida con tu Sidebar
         st.title(" 🩺 Ejecución Clínica & Cobros")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         
@@ -1313,7 +1313,6 @@ def vista_consultorio():
                 st.success("🎉 **CUENTA AL CORRIENTE:** El paciente no tiene adeudos pendientes.")
             
             # --- CAJÓN DE OBSERVACIONES ADMINISTRATIVAS (PERSISTENTE) ---
-            # Recuperamos la nota actual de la base de datos
             p_actual = pacientes[pacientes['id_paciente'] == id_p].iloc[0]
             nota_actual = p_actual.get('nota_administrativa', '')
             if nota_actual is None: nota_actual = ""
@@ -1321,9 +1320,9 @@ def vista_consultorio():
             with st.expander("📋 Observaciones Administrativas (Bitácora)", expanded=bool(nota_actual)):
                 with st.form("form_nota_admin_finanzas"):
                     obs_admin_persistent = st.text_area("Notas internas sobre el paciente:", 
-                                           value=nota_actual, 
-                                           height=80,
-                                           placeholder="Ej: Paciente VIP, requiere factura siempre, suele llegar tarde...")
+                                                       value=nota_actual, 
+                                                       height=80,
+                                                       placeholder="Ej: Paciente VIP, requiere factura siempre, suele llegar tarde...")
                     if st.form_submit_button("💾 Actualizar Observaciones"):
                         c = conn.cursor()
                         c.execute("UPDATE pacientes SET nota_administrativa = ? WHERE id_paciente = ?", (obs_admin_persistent, id_p))
@@ -1336,6 +1335,7 @@ def vista_consultorio():
             
             with tab_cobro:
                 with st.container(border=True):
+                    # 1. SELECCIÓN DEL TRATAMIENTO (FUERA DEL FORMULARIO)
                     col_up1, col_up2, col_up3 = st.columns(3)
                     if not servicios.empty:
                         cat_sel = col_up1.selectbox("Categoría", servicios['categoria'].unique()); filt = servicios[servicios['categoria'] == cat_sel]
@@ -1344,23 +1344,45 @@ def vista_consultorio():
                     else: cat_sel = "Manual"; trat_sel = col_up2.text_input("Tratamiento"); precio_sug = 0.0; costo_lab = 0.0
                     doc_name = col_up3.selectbox("Doctor", ["Dr. Emmanuel", "Dra. Mónica"])
                     
+                    st.markdown("---")
+                    
+                    # 2. [ARREGLO DEL CALENDARIO] - LÓGICA DE AGENDA FUERA DEL FORMULARIO
+                    # Al estar fuera, el checkbox reacciona instantáneamente (Rerun) y muestra el calendario.
+                    c_ag1, c_ag2 = st.columns([1, 3])
+                    agendar = c_ag1.checkbox("📅 ¿Agendar Siguiente Cita?", key="check_agendar_trat")
+                    
+                    # Variables por defecto
+                    f_cita = datetime.now(TZ_MX)
+                    h_cita = "00:00"
+                    
+                    if agendar:
+                        # Este bloque ahora sí aparece al instante
+                        with c_ag2:
+                            cc1, cc2 = st.columns(2)
+                            f_cita = cc1.date_input("Fecha Futura", datetime.now(TZ_MX))
+                            h_cita = cc2.selectbox("Hora", generar_slots_tiempo())
+                    
+                    st.markdown("---")
+
+                    # 3. FORMULARIO FINANCIERO (DATOS DE COBRO)
                     with st.form("cobro", clear_on_submit=True):
-                        c1, c2, c3 = st.columns(3); precio = c1.number_input("Precio", value=precio_sug, step=50.0); abono = c2.number_input("Abono", step=50.0); saldo = precio - abono; c3.metric("Saldo", f"${saldo:,.2f}")
-                        c4, c5, c6 = st.columns([1.5, 1, 1]); metodo = c4.selectbox("Método", ["Efectivo", "Tarjeta", "Transferencia", "Garantía", "Pendiente de Pago"]); num_sessions = c5.number_input("Sesiones", min_value=1, value=1); agendar = c6.checkbox("¿Agendar Cita?")
+                        st.markdown("#### 💰 Datos Financieros")
+                        c1, c2, c3 = st.columns(3); precio = c1.number_input("Precio Final", value=precio_sug, step=50.0); abono = c2.number_input("Monto a Abonar Hoy", step=50.0); saldo = precio - abono; c3.metric("Saldo Pendiente", f"${saldo:,.2f}")
                         
-                        if agendar: 
-                            c7, c8 = st.columns(2); f_cita = c7.date_input("Fecha Cita", datetime.now(TZ_MX)); h_cita = c8.selectbox("Hora Cita", generar_slots_tiempo())
-                        else: f_cita = datetime.now(TZ_MX); h_cita = "00:00"
+                        c4, c5 = st.columns(2) 
+                        metodo = c4.selectbox("Método de Pago", ["Efectivo", "Tarjeta", "Transferencia", "Garantía", "Pendiente de Pago"])
+                        num_sessions = c5.number_input("Sesiones Estimadas", min_value=1, value=1)
                         
-                        st.markdown("---")
                         # SEPARACIÓN DE NOTAS
+                        st.markdown("<br>", unsafe_allow_html=True)
                         col_nota1, col_nota2 = st.columns(2)
                         with col_nota1:
                             notas = st.text_area("📝 Nota de Evolución (Clínico - PDF)", height=80, placeholder="Procedimiento realizado...")
                         with col_nota2:
                             obs_admin = st.text_area("👁️ Observación Transacción (Interno)", height=80, placeholder="Ej: Pago parcial autorizado...")
 
-                        if st.form_submit_button("Registrar Cobro/Tratamiento"):
+                        # BOTÓN DE REGISTRO
+                        if st.form_submit_button("💾 Registrar Cobro y Agenda"):
                             if not notas.strip(): st.warning("⚠️ Guardando sin nota clínica.")
                             if metodo == "Garantía": abono = 0; saldo = 0; precio = 0 
                             estatus = "Pagado" if saldo <= 0 else "Pendiente"; c = conn.cursor()
@@ -1368,14 +1390,16 @@ def vista_consultorio():
                             nota_final = formato_oracion(notas)
                             obs_final = formato_oracion(obs_admin)
                             
+                            # Insertar Cobro/Tratamiento
                             c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, precio_lista, precio_final, porcentaje, metodo_pago, estado_pago, notas, observaciones, monto_pagado, saldo_pendiente, fecha_pago, costo_laboratorio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
                                       (int(time.time()), get_fecha_mx(), get_hora_mx(), id_p, nom_p, cat_sel, trat_sel, doc_name, precio_sug, precio, 0, metodo, estatus, nota_final, obs_final, abono, saldo, get_fecha_mx(), costo_lab))
                             
+                            # Insertar Cita Futura (Si el checkbox de arriba estaba activo)
                             if agendar: 
                                 c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, estado_pago, categoria, estatus_asistencia, notas) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''', 
                                           (int(time.time())+1, format_date_latino(f_cita), h_cita, id_p, nom_p, "Tratamiento", trat_sel, doc_name, "Pendiente", cat_sel, "Programada", f"Cita agendada. Obs: {obs_final}"))
                             
-                            conn.commit(); st.success("Registrado correctamente"); time.sleep(1); st.rerun()
+                            conn.commit(); st.success("✅ Tratamiento y Cobro Registrados Exitosamente"); time.sleep(1); st.rerun()
 
             with tab_abono:
                  with st.container(border=True):
@@ -1403,21 +1427,12 @@ def vista_consultorio():
                 df_f = pd.read_sql(f"SELECT rowid, fecha, tratamiento, doctor_atendio, precio_final, monto_pagado, saldo_pendiente, metodo_pago FROM citas WHERE id_paciente='{id_p}' AND estado_pago != 'CANCELADO' AND (precio_final > 0 OR monto_pagado > 0) ORDER BY timestamp DESC", conn)
                 
                 if not df_f.empty:
-                    # [CORRECCIÓN CVO V48.2]
-                    # 1. Seleccionamos columnas y reseteamos el índice
                     df_show = df_f[['fecha', 'tratamiento', 'precio_final', 'monto_pagado', 'saldo_pendiente', 'metodo_pago']].reset_index(drop=True)
-                    
-                    # 2. Creamos el índice CVO iniciando en 1
                     df_show.index = np.arange(1, len(df_show) + 1)
-                    
-                    # 3. Lo convertimos en columna para que Streamlit lo muestre con nombre
                     df_show = df_show.reset_index()
                     df_show.columns = ['CVO', 'FECHA', 'CONCEPTO', 'CARGO ($)', 'ABONO ($)', 'SALDO ($)', 'MÉTODO']
-                    
-                    # 4. Mostramos ocultando el índice por defecto de pandas (para que solo salga CVO)
                     st.dataframe(df_show, use_container_width=True, hide_index=True)
                     
-                    # Generación de Recibos (Mantenido)
                     st.caption("🖨️ Generar Recibo de Pago")
                     opciones_recibo = df_f.apply(lambda x: f"{x['fecha']} | {x['tratamiento']} | Abono: ${x['monto_pagado']} ({x['metodo_pago']})", axis=1).tolist(); sel_recibo = st.selectbox("Seleccionar Movimiento:", opciones_recibo)
                     if st.button("Descargar Recibo Seleccionado"):
