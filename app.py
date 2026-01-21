@@ -1432,7 +1432,7 @@ def vista_consultorio():
                         pdf_bytes = crear_recibo_pago(datos_pdf); clean_name = f"RECIBO_{datos_pdf['folio']}.pdf"; st.download_button("📥 Bajar PDF", pdf_bytes, clean_name, "application/pdf")
                 else: st.info("No hay movimientos financieros registrados.")
 
-    elif menu == "3. Consentimientos":
+     elif menu == "3. Consentimientos":
     st.title("✒️ Autorización de Tratamientos")
     df_p = pd.read_sql("SELECT * FROM pacientes", conn)
     
