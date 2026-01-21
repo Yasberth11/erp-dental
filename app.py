@@ -1261,7 +1261,7 @@ def vista_consultorio():
                 if os.path.exists(path):
                     for f in os.listdir(path): st.image(os.path.join(path,f), caption=f, width=200)
 
-    elif menu == "4. Recetas":
+    elif menu == "5. Recetas":
         # ... (Mantener V44 que funciona) ...
         st.title("📝 Prescripción Clínica")
         pacientes = pd.read_sql("SELECT id_paciente, nombre, apellido_paterno FROM pacientes", conn)
@@ -1291,7 +1291,7 @@ def vista_consultorio():
                         pdf_bytes = crear_pdf_receta(datos_receta); st.download_button("Descargar PDF Receta", pdf_bytes, f"RECETA_{p['nombre']}.pdf", "application/pdf")
             else: st.info("Seleccione un paciente para comenzar.")
 
-    elif menu == "3. Tratamientos":
+    elif menu == "4. Tratamientos":
         st.title(" 🩺 Ejecución Clínica & Cobros")
         pacientes = pd.read_sql("SELECT * FROM pacientes", conn); servicios = pd.read_sql("SELECT * FROM servicios", conn)
         
@@ -1432,7 +1432,7 @@ def vista_consultorio():
                         pdf_bytes = crear_recibo_pago(datos_pdf); clean_name = f"RECIBO_{datos_pdf['folio']}.pdf"; st.download_button("📥 Bajar PDF", pdf_bytes, clean_name, "application/pdf")
                 else: st.info("No hay movimientos financieros registrados.")
 
-    elif menu == "5. Consentimientos":
+    elif menu == "3. Consentimientos":
         st.title("✒️ Autorización de Tratamientos")
         df_p = pd.read_sql("SELECT * FROM pacientes", conn)
         
