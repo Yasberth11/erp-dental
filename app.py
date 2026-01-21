@@ -1448,19 +1448,18 @@ def vista_consultorio():
                 tratamiento_legal = ""
                 riesgo_legal = ""
                 nivel_riesgo = "LOW_RISK"
+                texto_a_mostrar = "" # <--- NUEVO CAMBIO: Variable para guardar el texto legal dinámico
+                
                 t1_name = ""
                 t2_name = ""
                 img_t1 = None
                 img_t2 = None
                 
+                # --- LÓGICA SI ES CONSENTIMIENTO MÉDICO ---
                 if "Consentimiento" in tipo_doc:
+                    texto_a_mostrar = CLAUSULA_CIERRE # <--- NUEVO CAMBIO: Asignamos el texto médico
                     hoy_str = get_fecha_mx()
-                    # -----------------------------------------------------------------------------
-                    # CORRECCIÓN 1: Desbloqueo financiero.
-                    # Se eliminó "(precio_final > 0...)" y se cambió por "estatus_asistencia != 'Canceló'"
-                    # Esto permite firmar citas programadas sin haber cobrado antes.
-                    # -----------------------------------------------------------------------------
-                    citas_hoy = pd.read_sql(f"SELECT * FROM citas WHERE id_paciente='{id_target}' AND fecha='{hoy_str}' AND estatus_asistencia != 'Canceló'", conn) # <--- CORRECCIÓN 1
+                    citas_hoy = pd.read_sql(f"SELECT * FROM citas WHERE id_paciente='{id_target}' AND fecha='{hoy_str}' AND estatus_asistencia != 'Canceló'", conn)
                     
                     if not citas_hoy.empty:
                         lista_tratamientos = citas_hoy['tratamiento'].unique().tolist()
@@ -1488,22 +1487,25 @@ def vista_consultorio():
                         st.warning("⚠️ No hay tratamientos programados para HOY.")
                         st.stop()
                 
+                # --- LÓGICA SI ES AVISO DE PRIVACIDAD ---
+                else: # <--- NUEVO CAMBIO: Bloque para Aviso de Privacidad
+                    nivel_riesgo = "LOW_RISK" # El aviso no requiere testigos usualmente
+                    # Concatenamos los textos legales definidos al inicio de tu código original
+                    texto_a_mostrar = f"**{TXT_DATOS_SENSIBLES}**\n\n{TXT_CONSENTIMIENTO_EXPRESO}" 
+    
                 col_doc_sel = st.columns(2)
                 doc_name_sel = col_doc_sel[0].selectbox("Odontólogo Tratante:", LISTA_DOCTORES)
                 
                 if nivel_riesgo != 'NO_CONSENT':
-                    # -----------------------------------------------------------------------------
-                    # CORRECCIÓN 2: Firma a Ciegas (Blind Signing).
-                    # Mostramos el texto legal y riesgos ANTES de dibujar los recuadros de firma.
-                    # -----------------------------------------------------------------------------
                     st.markdown("---")
-                    st.warning("⚠️ DECLARACIÓN LEGAL PREVIA A LA FIRMA:") # <--- CORRECCIÓN 2 (INICIO)
+                    st.warning("⚠️ DECLARACIÓN LEGAL PREVIA A LA FIRMA:")
+                    
                     if riesgo_legal:
                         st.info(f"**AL FIRMAR ACEPTO LOS RIESGOS ESPECÍFICOS:**\n\n{riesgo_legal}")
                     
-                    # Mostramos la cláusula legal general (la que está en el PDF) en pantalla pequeña
-                    st.markdown(f"<div style='font-size:0.85em; color:#555; background-color:#f9f9f9; padding:10px; border-radius:5px;'>{CLAUSULA_CIERRE}</div>", unsafe_allow_html=True)
-                    st.markdown("---") # <--- CORRECCIÓN 2 (FIN)
+                    # --- AQUÍ MOSTRAMOS EL TEXTO DINÁMICO (YA SEA CLAUSULA O AVISO) ---
+                    st.markdown(f"<div style='font-size:0.85em; color:#333; background-color:#f9f9f9; padding:15px; border-radius:5px; border:1px solid #ddd;'>{texto_a_mostrar}</div>", unsafe_allow_html=True) # <--- NUEVO CAMBIO
+                    st.markdown("---")
     
                     st.markdown("### Firmas Digitales")
                     col_firmas_1, col_firmas_2 = st.columns(2)
@@ -1583,7 +1585,7 @@ def vista_consultorio():
                             st.download_button("Descargar PDF Firmado", pdf_bytes, clean_filename, "application/pdf")
                 else: 
                     st.warning("⚠️ No se genera documento legal para este concepto.")
-
+                
     elif menu == "6. Control Asistencia":
         st.title("🆔 Asistencia")
         col_a, col_b = st.columns(2)
