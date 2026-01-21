@@ -265,10 +265,10 @@ init_db(); migrar_tablas(); seed_data(); actualizar_niveles_riesgo(); actualizar
 # ==========================================
 # 3. HELPERS (FUNCIONES DE AYUDA)
 # ==========================================
-def get_fecha_larga_mx():
-    meses = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"]
-    hoy = datetime.now(TZ_MX)
-    return f"{hoy.day} DE {meses[hoy.month-1]} DE {hoy.year}"
+
+def get_fecha_mx(): return datetime.now(TZ_MX).strftime("%d/%m/%Y")
+def get_hora_mx(): return datetime.now(TZ_MX).strftime("%H:%M:%S")
+def format_date_latino(date_obj): return date_obj.strftime("%d/%m/%Y")
 
 def normalizar_texto_pdf(texto):
     if not texto: return ""
