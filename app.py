@@ -801,7 +801,7 @@ def vista_consultorio():
     conn = get_db_connection(); render_header(conn)
     if os.path.exists(LOGO_FILE): st.sidebar.image(LOGO_FILE, use_column_width=True)
     st.sidebar.markdown("### 🏥 Royal Dental"); st.sidebar.caption(f"Fecha: {get_fecha_mx()}")
-    menu = st.sidebar.radio("Menú", ["1. Agenda & Citas", "2. Gestión de Pacientes", "3. Tratamientos", "4. Recetas", "5. Consentimientos", "6. Control Asistencia"])
+    menu = st.sidebar.radio("Menú", ["1. Agenda & Citas", "2. Gestión de Pacientes", "3. Consentimientos", "4. Tratamientos", "5. Recetas", "6. Control Asistencia"])
     
     with st.sidebar.expander("🛠️ Mantenimiento"):
         if st.button("🗑️ RESETEAR BASE DE DATOS (CUIDADO)", type="primary"):
