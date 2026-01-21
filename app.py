@@ -1472,45 +1472,62 @@ def vista_consultorio():
                 riesgo_legal = ""
                 tratamiento_legal = ""
                 texto_body = ""
+                t1_name = ""
+                t2_name = ""
+                img_t1 = None
+                img_t2 = None
                 
                 # ==========================================================
-                # LÓGICA 1: CONSENTIMIENTO INFORMADO (SELECCIÓN MANUAL)
+                # LÓGICA 1: CONSENTIMIENTO INFORMADO (SELECCIÓN JERÁRQUICA)
                 # ==========================================================
                 if "Consentimiento" in tipo_doc:
                     st.info("Seleccione el procedimiento a realizar para cargar sus riesgos legales:")
                     
-                    # 1. Cargamos TODOS los servicios del consultorio
-                    servicios = pd.read_sql("SELECT nombre_tratamiento, consent_level FROM servicios ORDER BY nombre_tratamiento ASC", conn)
-                    lista_servicios = servicios['nombre_tratamiento'].unique().tolist()
+                    # 1. Cargamos TODOS los servicios con su categoría
+                    # <--- CAMBIO: Traemos la columna 'categoria' también
+                    servicios = pd.read_sql("SELECT categoria, nombre_tratamiento, consent_level FROM servicios ORDER BY categoria, nombre_tratamiento ASC", conn)
                     
-                    # 2. Boxlist (Selectbox) para elegir procedimiento manualmente
-                    trat_seleccionado = st.selectbox("Seleccionar Procedimiento:", lista_servicios)
-                    
-                    if trat_seleccionado:
-                        tratamiento_legal = trat_seleccionado
+                    if not servicios.empty:
+                        # 2. COLUMNAS PARA SELECCIÓN JERÁRQUICA
+                        c_cat, c_trat = st.columns(2)
                         
-                        # 3. Detectar Riesgos y Nivel (Automático)
-                        riesgo_item = RIESGOS_DB.get(trat_seleccionado, "Riesgos generales inherentes al procedimiento odontológico.")
-                        riesgo_legal = f"- {trat_seleccionado}: {riesgo_item}\n"
+                        # A) Seleccionar Categoría
+                        lista_categorias = servicios['categoria'].unique().tolist()
+                        cat_sel = c_cat.selectbox("1. Categoría:", lista_categorias)
                         
-                        # Detectar si requiere testigos (High Risk)
-                        row_s = servicios[servicios['nombre_tratamiento'] == trat_seleccionado]
-                        if not row_s.empty and row_s.iloc[0]['consent_level'] == 'HIGH_RISK':
-                            nivel_riesgo = 'HIGH_RISK'
-                        # Fallback de seguridad por palabras clave
-                        elif any(kw in trat_seleccionado.upper() for kw in ["CIRUGIA", "EXTRACCION", "MUELA", "TERCER", "DRENAJE", "IMPLANTE"]):
-                            nivel_riesgo = 'HIGH_RISK'
-
-                        # Visualización de Alertas
-                        st.markdown("---")
-                        st.markdown(f"**Riesgo Detectado:** {riesgo_legal}")
+                        # B) Filtrar y Seleccionar Tratamiento
+                        filt = servicios[servicios['categoria'] == cat_sel]
+                        lista_trats = filt['nombre_tratamiento'].unique().tolist()
+                        trat_seleccionado = c_trat.selectbox("2. Procedimiento:", lista_trats)
                         
-                        if nivel_riesgo == 'HIGH_RISK':
-                            st.error("🔴 PROCEDIMIENTO DE ALTO RIESGO: Se habilitan campos para 2 Testigos.")
-                        else:
-                            st.success("🟢 BAJO RIESGO: Solo requiere firma de Doctor y Paciente.")
+                        if trat_seleccionado:
+                            tratamiento_legal = trat_seleccionado
                             
-                        texto_body = CLAUSULA_CIERRE # Texto legal médico
+                            # 3. Detectar Riesgos y Nivel (Automático)
+                            riesgo_item = RIESGOS_DB.get(trat_seleccionado, "Riesgos generales inherentes al procedimiento odontológico.")
+                            riesgo_legal = f"- {trat_seleccionado}: {riesgo_item}\n"
+                            
+                            # Detectar si requiere testigos (High Risk) - Buscando en el DF filtrado
+                            row_s = filt[filt['nombre_tratamiento'] == trat_seleccionado]
+                            
+                            if not row_s.empty and row_s.iloc[0]['consent_level'] == 'HIGH_RISK':
+                                nivel_riesgo = 'HIGH_RISK'
+                            # Fallback de seguridad por palabras clave
+                            elif any(kw in trat_seleccionado.upper() for kw in ["CIRUGIA", "EXTRACCION", "MUELA", "TERCER", "DRENAJE", "IMPLANTE"]):
+                                nivel_riesgo = 'HIGH_RISK'
+
+                            # Visualización de Alertas
+                            st.markdown("---")
+                            st.markdown(f"**Riesgo Detectado:** {riesgo_legal}")
+                            
+                            if nivel_riesgo == 'HIGH_RISK':
+                                st.error("🔴 PROCEDIMIENTO DE ALTO RIESGO: Se habilitan campos para 2 Testigos.")
+                            else:
+                                st.success("🟢 BAJO RIESGO: Solo requiere firma de Doctor y Paciente.")
+                                
+                            texto_body = CLAUSULA_CIERRE # Texto legal médico
+                    else:
+                        st.warning("No hay servicios registrados en la base de datos.")
 
                 # ==========================================================
                 # LÓGICA 2: AVISO DE PRIVACIDAD
@@ -1551,17 +1568,13 @@ def vista_consultorio():
                     else: t1_name=""; t2_name=""; canvas_t1=None; canvas_t2=None # Limpiar variables si no es High Risk
 
                 if st.button("Generar PDF Legal"):
-                    # ... (Aquí va la misma lógica de generación de PDF e imágenes que ya tienes, no cambia nada interno) ...
-                    # SOLO ASEGÚRATE de pasar las variables 'tratamiento_legal' y 'riesgo_legal' que definimos arriba.
-                    # Te dejo el bloque de llamada para que copies y pegues:
-                    
                     bloqueo = False
                     if "Consentimiento" in tipo_doc and nivel_riesgo == 'HIGH_RISK':
                         if not (t1_name and t2_name): st.error("⛔ Faltan testigos."); bloqueo = True
                         if canvas_t1.image_data is None or canvas_t2.image_data is None: st.error("⛔ Faltan firmas testigos."); bloqueo = True
                     
                     if not bloqueo:
-                        # Procesar Imagenes (Tu codigo actual de base64...)
+                        # Procesar Imagenes
                         img_pac=None; img_doc=None; img_t1=None; img_t2=None
                         if canvas_pac.image_data is not None and not np.all(canvas_pac.image_data[:,:,3] == 0):
                              img = Image.fromarray(canvas_pac.image_data.astype('uint8'), 'RGBA'); buf = io.BytesIO(); img.save(buf, format="PNG"); img_pac = base64.b64encode(buf.getvalue()).decode()
