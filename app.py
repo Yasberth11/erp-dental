@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
+import datos_prueba  # <--- AGREGA ESTO
 from datetime import datetime, timedelta
 import pytz
 import re
@@ -827,6 +828,20 @@ def vista_consultorio():
             except Exception as e: st.error(f"Error crítico: {e}")
     if st.sidebar.button("Cerrar Sesión"): st.session_state.perfil = None; st.rerun()
 
+    # --- ZONA DE DESARROLLO (SOLO PARA TI) ---
+    st.sidebar.markdown("---")
+    st.sidebar.caption("🛠️ Herramientas de Desarrollador")
+    if st.sidebar.button("🌱 Sembrar Datos de Prueba"):
+        with st.spinner("Generando pacientes y finanzas..."):
+            try:
+                # Ejecutamos la función main() de tu script
+                datos_prueba.main()
+                st.success("✅ ¡Datos cargados exitosamente!")
+                time.sleep(2)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+                
     if menu == "1. Agenda & Citas":
         # [ESTILO CSS OPTIMIZADO PARA LISTA COMPACTA]
         st.markdown("""
