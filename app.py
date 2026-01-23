@@ -973,7 +973,7 @@ def vista_consultorio():
                     df = pd.read_sql(query, conn)
                     st.dataframe(df, use_container_width=True, hide_index=True)
 
-            # [AGENDAR CITA NUEVA - CON RESET ID]
+# [AGENDAR CITA NUEVA - CON SELECTOR SEGURO]
             with st.expander("➕ Agendar Cita Nueva", expanded=True):
                 tab_reg, tab_new = st.tabs(["Registrado", "Prospecto"])
                 
@@ -984,9 +984,18 @@ def vista_consultorio():
                     lista_pac = pacientes_raw.apply(lambda x: f"{x['id_paciente']} - {x['nombre']} {x['apellido_paterno']}", axis=1).tolist() if not pacientes_raw.empty else []
                     
                     p_sel_r = st.selectbox("Paciente*", ["Seleccionar..."] + lista_pac, key=f"p_reg_{reset_id}")
-                    cat_sel_r = st.selectbox("Categoría", cats, key=f"cat_reg_{reset_id}")
+                    
+                    # --- CAMBIO: FECHA SEGURA (Bloquea Pasado) ---
+                    c_f1, c_f2 = st.columns(2)
+                    # min_value bloquea ayer y atrás.
+                    f_agenda_r = c_f1.date_input("📅 Fecha Cita", datetime.now(TZ_MX), min_value=datetime.now(TZ_MX).date(), key=f"f_reg_{reset_id}")
+                    h_sel_r = c_f2.selectbox("Hora Inicio", generar_slots_tiempo(), key=f"hora_reg_{reset_id}")
+                    # ---------------------------------------------
+
+                    c_cat, c_trat = st.columns(2)
+                    cat_sel_r = c_cat.selectbox("Categoría", cats, key=f"cat_reg_{reset_id}")
                     trats_filtrados_r = servicios[servicios['categoria'] == cat_sel_r]['nombre_tratamiento'].unique()
-                    trat_sel_r = st.selectbox("Tratamiento*", trats_filtrados_r, key=f"trat_reg_{reset_id}")
+                    trat_sel_r = c_trat.selectbox("Tratamiento*", trats_filtrados_r, key=f"trat_reg_{reset_id}")
                     
                     dur_default_r = 30
                     if trat_sel_r:
@@ -995,21 +1004,24 @@ def vista_consultorio():
                     
                     c_d1, c_d2 = st.columns(2)
                     duracion_cita_r = c_d1.number_input("Minutos", value=dur_default_r, step=30, key=f"dur_reg_{reset_id}")
-                    h_sel_r = c_d2.selectbox("Hora Inicio", generar_slots_tiempo(), key=f"hora_reg_{reset_id}")
-                    d_sel_r = st.selectbox("Doctor", LISTA_DOCTORES, key=f"doc_reg_{reset_id}")
+                    d_sel_r = c_d2.selectbox("Doctor", LISTA_DOCTORES, key=f"doc_reg_{reset_id}")
                     
                     urgencia_r = st.checkbox("🚨 Agendar como Urgencia (Permitir cruce)", key=f"urg_reg_{reset_id}")
                     
                     if st.button("💾 Confirmar Cita (Registrado)", use_container_width=True):
                          if p_sel_r != "Seleccionar...":
-                             ocupado = verificar_disponibilidad(fecha_ver_str, h_sel_r, duracion_cita_r)
+                             # Convertimos la fecha segura a string latino
+                             f_agenda_str_r = format_date_latino(f_agenda_r)
+                             
+                             ocupado = verificar_disponibilidad(f_agenda_str_r, h_sel_r, duracion_cita_r)
                              if ocupado and not urgencia_r: 
                                  st.error("⚠️ Horario OCUPADO. Marque 'Urgencia' para empalmar.")
                              else:
                                  id_p = p_sel_r.split(" - ")[0]; nom_p = p_sel_r.split(" - ")[1]
                                  c = conn.cursor()
+                                 # Usamos f_agenda_str_r en el INSERT
                                  c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, categoria, tratamiento, doctor_atendio, estado_pago, estatus_asistencia, duracion, notas) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''', 
-                                           (int(time.time()), fecha_ver_str, h_sel_r, id_p, nom_p, cat_sel_r, trat_sel_r, d_sel_r, "Pendiente", "Programada", duracion_cita_r, f"Cita: {trat_sel_r}"))
+                                           (int(time.time()), f_agenda_str_r, h_sel_r, id_p, nom_p, cat_sel_r, trat_sel_r, d_sel_r, "Pendiente", "Programada", duracion_cita_r, f"Cita: {trat_sel_r}"))
                                  conn.commit()
                                  st.success("Agendado")
                                  st.session_state.form_reset_id += 1 # Limpieza
@@ -1022,10 +1034,19 @@ def vista_consultorio():
                     nom_pros = c_n1.text_input("Nombre Completo*", key=f"new_p_nom_{reset_id}")
                     tel_pros = c_n2.text_input("Teléfono (10)*", key=f"new_p_tel_{reset_id}", max_chars=10)
                     
+                    # --- CAMBIO: FECHA SEGURA (Bloquea Pasado) ---
+                    c_fp1, c_fp2 = st.columns(2)
+                    # min_value bloquea el pasado SOLO para la cita
+                    f_agenda_p = c_fp1.date_input("📅 Fecha Cita", datetime.now(TZ_MX), min_value=datetime.now(TZ_MX).date(), key=f"f_pros_{reset_id}")
+                    hora_pros = c_fp2.selectbox("Hora Inicio", generar_slots_tiempo(), key=f"hora_pros_{reset_id}")
+                    # ---------------------------------------------
+                    
                     servicios_p = pd.read_sql("SELECT * FROM servicios", conn); cats_p = servicios_p['categoria'].unique()
-                    cat_sel_p = st.selectbox("Categoría", cats_p, key=f"cat_pros_{reset_id}")
+                    
+                    c_cp1, c_cp2 = st.columns(2)
+                    cat_sel_p = c_cp1.selectbox("Categoría", cats_p, key=f"cat_pros_{reset_id}")
                     trats_filtrados_p = servicios_p[servicios_p['categoria'] == cat_sel_p]['nombre_tratamiento'].unique()
-                    trat_sel_p = st.selectbox("Tratamiento*", trats_filtrados_p, key=f"trat_pros_{reset_id}")
+                    trat_sel_p = c_cp2.selectbox("Tratamiento*", trats_filtrados_p, key=f"trat_pros_{reset_id}")
                     
                     dur_default_p = 30
                     if trat_sel_p:
@@ -1034,21 +1055,24 @@ def vista_consultorio():
                     
                     c_tp1, c_tp2 = st.columns(2)
                     duracion_cita_p = c_tp1.number_input("Minutos", value=dur_default_p, step=30, key=f"dur_pros_{reset_id}")
-                    hora_pros = c_tp2.selectbox("Hora Inicio", generar_slots_tiempo(), key=f"hora_pros_{reset_id}")
-                    doc_pros = st.selectbox("Doctor", LISTA_DOCTORES, key=f"doc_pros_{reset_id}")
+                    doc_pros = c_tp2.selectbox("Doctor", LISTA_DOCTORES, key=f"doc_pros_{reset_id}")
                     
                     urgencia_p = st.checkbox("🚨 Es Urgencia / Sobrecupo", key=f"urg_pros_{reset_id}")
                     
                     if st.button("💾 Agendar Prospecto", use_container_width=True):
                         if nom_pros and len(tel_pros) == 10:
-                             ocupado = verificar_disponibilidad(fecha_ver_str, hora_pros, duracion_cita_p)
+                             # Convertimos fecha segura a string
+                             f_agenda_str_p = format_date_latino(f_agenda_p)
+                             
+                             ocupado = verificar_disponibilidad(f_agenda_str_p, hora_pros, duracion_cita_p)
                              if ocupado and not urgencia_p: 
                                  st.error("⚠️ Horario OCUPADO. Marque 'Urgencia' para empalmar.")
                              else:
                                  id_temp = f"PROS-{int(time.time())}"
                                  c = conn.cursor()
+                                 # Usamos f_agenda_str_p en el INSERT
                                  c.execute('''INSERT INTO citas (timestamp, fecha, hora, id_paciente, nombre_paciente, tipo, tratamiento, doctor_atendio, estado_pago, estatus_asistencia, notas, duracion) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''', 
-                                           (int(time.time()), fecha_ver_str, hora_pros, id_temp, formato_nombre_legal(nom_pros), "Primera Vez", trat_sel_p, doc_pros, "Pendiente", "Programada", f"Tel: {tel_pros}", duracion_cita_p))
+                                           (int(time.time()), f_agenda_str_p, hora_pros, id_temp, formato_nombre_legal(nom_pros), "Primera Vez", trat_sel_p, doc_pros, "Pendiente", "Programada", f"Tel: {tel_pros}", duracion_cita_p))
                                  conn.commit()
                                  st.success("Prospecto Agendado")
                                  st.session_state.form_reset_id += 1 # Limpieza
