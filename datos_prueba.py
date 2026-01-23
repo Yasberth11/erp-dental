@@ -5,12 +5,12 @@ from datetime import datetime, timedelta
 
 # CONFIGURACIÓN
 DB_NAME = "dental.db"
-NUM_PACIENTES = 12
+NUM_PACIENTES = 20  # <--- CAMBIO A 20 PACIENTES
 DIAS_HISTORIA = 60  # Generar datos de hace 2 meses para acá
 
 # Nombres ficticios para generar variedad
-NOMBRES = ["Ana", "Carlos", "Beatriz", "David", "Elena", "Fernando", "Gabriela", "Hugo", "Isabel", "Juan", "Karla", "Luis"]
-APELLIDOS = ["García", "López", "Martínez", "Rodríguez", "Pérez", "Sánchez", "Ramírez", "Flores", "Gómez", "Díaz"]
+NOMBRES = ["Ana", "Carlos", "Beatriz", "David", "Elena", "Fernando", "Gabriela", "Hugo", "Isabel", "Juan", "Karla", "Luis", "Mariana", "Pedro", "Rosa", "Sergio", "Teresa", "Victor", "Ximena", "Yolanda"]
+APELLIDOS = ["García", "López", "Martínez", "Rodríguez", "Pérez", "Sánchez", "Ramírez", "Flores", "Gómez", "Díaz", "Hernández", "Vargas", "Castillo", "Jiménez", "Moreno"]
 TRATAMIENTOS_BASE = [
     # (Categoria, Nombre, Precio, CostoLab, Riesgo, Duracion)
     ("Preventivo", "Limpieza Dental (Profilaxis)", 800, 0, "LOW_RISK", 30),
